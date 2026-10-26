@@ -1,0 +1,95 @@
+"""Reference data loaded by console migration 0002. Edit here and add a migration to change it."""
+
+# (code, name, symbol, decimals)
+CURRENCIES = [
+    ('INR', 'Indian Rupee', '₹', 2),
+    ('AED', 'UAE Dirham', 'AED', 2),
+    ('SAR', 'Saudi Riyal', 'SAR', 2),
+    ('QAR', 'Qatari Riyal', 'QAR', 2),
+    ('OMR', 'Omani Rial', 'OMR', 3),
+    ('KWD', 'Kuwaiti Dinar', 'KD', 3),
+    ('BHD', 'Bahraini Dinar', 'BD', 3),
+    ('USD', 'US Dollar', '$', 2),
+    ('CAD', 'Canadian Dollar', 'CA$', 2),
+    ('GBP', 'Pound Sterling', '£', 2),
+    ('EUR', 'Euro', '€', 2),
+    ('AUD', 'Australian Dollar', 'A$', 2),
+    ('NZD', 'New Zealand Dollar', 'NZ$', 2),
+    ('SGD', 'Singapore Dollar', 'S$', 2),
+    ('MYR', 'Malaysian Ringgit', 'RM', 2),
+    ('THB', 'Thai Baht', '฿', 2),
+    ('IDR', 'Indonesian Rupiah', 'Rp', 0),
+    ('PHP', 'Philippine Peso', '₱', 2),
+    ('LKR', 'Sri Lankan Rupee', 'Rs', 2),
+    ('NPR', 'Nepalese Rupee', 'Rs', 2),
+    ('BDT', 'Bangladeshi Taka', '৳', 2),
+    ('ZAR', 'South African Rand', 'R', 2),
+    ('KES', 'Kenyan Shilling', 'KSh', 2),
+    ('NGN', 'Nigerian Naira', '₦', 2),
+    ('EGP', 'Egyptian Pound', 'E£', 2),
+    ('JPY', 'Japanese Yen', '¥', 0),
+]
+
+# (code, name, currency, locale, time zone, tax registration label, taxes for a new client).
+# Starting points for a typical restaurant, not tax advice; the client edits them.
+COUNTRIES = [
+    ('IN', 'India', 'INR', 'en-IN', 'Asia/Kolkata', 'GSTIN', [{'name': 'CGST', 'code': 'CGST', 'type': 'percentage', 'rate': 2.5, 'reporting_code': 'SAC 996331'}, {'name': 'SGST', 'code': 'SGST', 'type': 'percentage', 'rate': 2.5, 'reporting_code': 'SAC 996331'}]),
+    ('AE', 'United Arab Emirates', 'AED', 'en-AE', 'Asia/Dubai', 'TRN', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 5}]),
+    ('SA', 'Saudi Arabia', 'SAR', 'ar-SA', 'Asia/Riyadh', 'VAT No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 15}]),
+    ('QA', 'Qatar', 'QAR', 'en-QA', 'Asia/Qatar', 'Tax ID', []),
+    ('OM', 'Oman', 'OMR', 'en-OM', 'Asia/Muscat', 'VATIN', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 5}]),
+    ('KW', 'Kuwait', 'KWD', 'en-KW', 'Asia/Kuwait', 'Tax ID', []),
+    ('BH', 'Bahrain', 'BHD', 'en-BH', 'Asia/Bahrain', 'VAT No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 10}]),
+    ('US', 'United States', 'USD', 'en-US', 'America/New_York', 'EIN', [{'name': 'Sales Tax', 'code': 'ST', 'type': 'percentage', 'rate': 0}]),
+    ('CA', 'Canada', 'CAD', 'en-CA', 'America/Toronto', 'BN', [{'name': 'GST', 'code': 'GST', 'type': 'percentage', 'rate': 5}]),
+    ('GB', 'United Kingdom', 'GBP', 'en-GB', 'Europe/London', 'VAT No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 20}]),
+    ('IE', 'Ireland', 'EUR', 'en-IE', 'Europe/Dublin', 'VAT No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 13.5}]),
+    ('DE', 'Germany', 'EUR', 'de-DE', 'Europe/Berlin', 'USt-IdNr', [{'name': 'MwSt', 'code': 'MWST', 'type': 'percentage', 'rate': 19}]),
+    ('FR', 'France', 'EUR', 'fr-FR', 'Europe/Paris', 'N° TVA', [{'name': 'TVA', 'code': 'TVA', 'type': 'percentage', 'rate': 10}]),
+    ('ES', 'Spain', 'EUR', 'es-ES', 'Europe/Madrid', 'NIF', [{'name': 'IVA', 'code': 'IVA', 'type': 'percentage', 'rate': 10}]),
+    ('IT', 'Italy', 'EUR', 'it-IT', 'Europe/Rome', 'P.IVA', [{'name': 'IVA', 'code': 'IVA', 'type': 'percentage', 'rate': 10}]),
+    ('NL', 'Netherlands', 'EUR', 'nl-NL', 'Europe/Amsterdam', 'BTW-id', [{'name': 'BTW', 'code': 'BTW', 'type': 'percentage', 'rate': 9}]),
+    ('AU', 'Australia', 'AUD', 'en-AU', 'Australia/Sydney', 'ABN', [{'name': 'GST', 'code': 'GST', 'type': 'percentage', 'rate': 10}]),
+    ('NZ', 'New Zealand', 'NZD', 'en-NZ', 'Pacific/Auckland', 'GST No', [{'name': 'GST', 'code': 'GST', 'type': 'percentage', 'rate': 15}]),
+    ('SG', 'Singapore', 'SGD', 'en-SG', 'Asia/Singapore', 'GST Reg No', [{'name': 'GST', 'code': 'GST', 'type': 'percentage', 'rate': 9}]),
+    ('MY', 'Malaysia', 'MYR', 'en-MY', 'Asia/Kuala_Lumpur', 'SST No', [{'name': 'Service Tax', 'code': 'SST', 'type': 'percentage', 'rate': 6}]),
+    ('TH', 'Thailand', 'THB', 'th-TH', 'Asia/Bangkok', 'Tax ID', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 7}]),
+    ('ID', 'Indonesia', 'IDR', 'id-ID', 'Asia/Jakarta', 'NPWP', [{'name': 'PB1', 'code': 'PB1', 'type': 'percentage', 'rate': 10}]),
+    ('PH', 'Philippines', 'PHP', 'en-PH', 'Asia/Manila', 'TIN', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 12}]),
+    ('LK', 'Sri Lanka', 'LKR', 'en-LK', 'Asia/Colombo', 'VAT No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 18}]),
+    ('NP', 'Nepal', 'NPR', 'en-NP', 'Asia/Kathmandu', 'PAN', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 13}]),
+    ('BD', 'Bangladesh', 'BDT', 'en-BD', 'Asia/Dhaka', 'BIN', []),
+    ('ZA', 'South Africa', 'ZAR', 'en-ZA', 'Africa/Johannesburg', 'VAT No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 15}]),
+    ('KE', 'Kenya', 'KES', 'en-KE', 'Africa/Nairobi', 'KRA PIN', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 16}]),
+    ('NG', 'Nigeria', 'NGN', 'en-NG', 'Africa/Lagos', 'TIN', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 7.5}]),
+    ('EG', 'Egypt', 'EGP', 'ar-EG', 'Africa/Cairo', 'Tax Reg No', [{'name': 'VAT', 'code': 'VAT', 'type': 'percentage', 'rate': 14}]),
+    ('JP', 'Japan', 'JPY', 'ja-JP', 'Asia/Tokyo', 'T-Number', [{'name': 'Consumption Tax', 'code': 'CT', 'type': 'percentage', 'rate': 10}]),
+]
+
+# Same keys as the POS app (src/utils/posAccess.js), plus new ones
+# (key, group, label, approvable, admin_only, sort_order)
+PERMISSIONS = [
+    ('bill.settle', 'Billing', 'Settle bills', False, False, 10),
+    ('bill.reprint', 'Billing', 'Reprint bills', False, False, 20),
+    ('bill.refund', 'Billing', 'Refund a paid bill', True, False, 25),
+    ('discount.unlimited', 'Billing', 'Discounts above the cashier limit', True, False, 30),
+    ('payment.credit', 'Billing', 'Credit Pay (bill to be paid later)', True, False, 40),
+    ('order.void_items', 'Orders', 'Reduce or remove items already sent to the kitchen', True, False, 50),
+    ('order.cancel', 'Orders', 'Cancel an order', True, False, 55),
+    ('cash.movement', 'Cash', 'Cash in / cash out at the counter', True, False, 60),
+    ('history.full', 'History & reports', 'Full history (any date)', False, False, 70),
+    ('history.export', 'History & reports', 'Export history to Excel', False, False, 80),
+    ('reports.view', 'History & reports', 'Reports', False, False, 90),
+    ('inventory.manage', 'Setup', 'Inventory, recipes and stock', False, False, 95),
+    ('settings.manage', 'Setup', 'Tables, products, taxes and print settings', False, False, 100),
+    ('users.manage', 'Setup', 'Users & roles', False, True, 110),
+]
+
+PLANS = [
+    {'code': 'starter', 'name': 'Starter', 'max_outlets': 1, 'max_users': 10, 'max_devices': 3,
+     'features': {'inventory': False, 'qr_ordering': False, 'aggregators': False, 'multi_outlet': False}},
+    {'code': 'growth', 'name': 'Growth', 'max_outlets': 3, 'max_users': 40, 'max_devices': 10,
+     'features': {'inventory': True, 'qr_ordering': True, 'aggregators': False, 'multi_outlet': True}},
+    {'code': 'enterprise', 'name': 'Enterprise', 'max_outlets': None, 'max_users': None, 'max_devices': None,
+     'features': {'inventory': True, 'qr_ordering': True, 'aggregators': True, 'multi_outlet': True}},
+]
