@@ -91,11 +91,17 @@ def test_logout_ends_the_session(client_admin):
     assert r.status_code == 401 and r.data['code'] == 'session_revoked'
 
 
-def test_change_password_clears_the_flag(client_admin):
-    _, api, _ = client_admin
+def test_temporary_password_must_be_changed_first(make_client, mailoutbox):
+    make_client()
+    api, _ = sign_in('sg_admin', 'Admin-pass-1', mailoutbox, first_time=False)
     assert api.get('/api/auth/me/').data['must_change_password'] is True
+    blocked = api.get('/api/pos/api/restaurants/')
+    assert blocked.status_code == 403 and blocked.data['code'] == 'password_change_required'
+    same = api.post('/api/auth/change-password/', {'current_password': 'Admin-pass-1', 'new_password': 'Admin-pass-1'}, format='json')
+    assert same.status_code == 400
     r = api.post('/api/auth/change-password/', {'current_password': 'Admin-pass-1', 'new_password': 'New-pass-456'}, format='json')
     assert r.status_code == 200
+    assert api.get('/api/pos/api/restaurants/').status_code == 200
     me = api.get('/api/auth/me/').data
     assert me['must_change_password'] is False
     assert me['role']['key'] == 'administrator' and 'users.manage' in me['permissions']

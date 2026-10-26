@@ -56,7 +56,8 @@ class TenantCreateSerializer(serializers.Serializer):
     login_prefix = serializers.RegexField(r'^[a-z0-9]{2,12}$', required=False, allow_blank=True)
     admin_login_id = serializers.RegexField(LOGIN_ID_RE, error_messages={'invalid': LOGIN_ID_HELP})
     admin_password = serializers.CharField(min_length=8, write_only=True)
-    admin_email = serializers.EmailField(required=False, allow_blank=True)
+    # Required: Administrators sign in with an emailed code
+    admin_email = serializers.EmailField()
     contact_name = serializers.CharField(required=False, allow_blank=True)
     contact_email = serializers.EmailField(required=False, allow_blank=True)
     contact_phone = serializers.CharField(required=False, allow_blank=True)
@@ -83,6 +84,10 @@ class StatusHistorySerializer(serializers.ModelSerializer):
 
 
 class PlatformAuditSerializer(serializers.ModelSerializer):
+    platform_user_email = serializers.CharField(source='platform_user.email', default=None, read_only=True)
+    tenant_name = serializers.CharField(source='tenant.name', default=None, read_only=True)
+
     class Meta:
         model = PlatformAuditLog
-        fields = ['id', 'platform_user', 'tenant', 'action', 'details', 'ip_address', 'created_at']
+        fields = ['id', 'platform_user', 'platform_user_email', 'tenant', 'tenant_name', 'action', 'details',
+                  'ip_address', 'created_at']

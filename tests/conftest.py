@@ -57,8 +57,24 @@ def code_from(mailoutbox):
     return re.search(r'\b(\d{6})\b', mailoutbox[-1].body).group(1)
 
 
-def sign_in(login_id, password, mailoutbox=None, otp_trust=None):
-    """Full sign-in (with the emailed code when asked). Returns (api client, token response)."""
+def own_password(temporary):
+    """The password a user picks after signing in with a temporary one."""
+    return f'{temporary}-own'
+
+
+ADMIN_PASSWORD = own_password('Admin-pass-1')
+
+
+def change_password(api, current, new):
+    r = api.post('/api/auth/change-password/', {'current_password': current, 'new_password': new}, format='json')
+    assert r.status_code == 200, r.data
+
+
+def sign_in(login_id, password, mailoutbox=None, otp_trust=None, first_time=True):
+    """
+    Full sign-in (with the emailed code when asked). Returns (api client, token response).
+    On a temporary password the user then sets their own, own_password(password), unless first_time=False.
+    """
     api = APIClient()
     body = {'username': login_id, 'password': password}
     if otp_trust:
@@ -69,6 +85,8 @@ def sign_in(login_id, password, mailoutbox=None, otp_trust=None):
         r = api.post('/api/auth/token/', {**body, 'otp_code': code_from(mailoutbox)}, format='json')
     assert r.status_code == 200, r.data
     api.credentials(HTTP_AUTHORIZATION=f"Bearer {r.data['access']}")
+    if first_time and r.data['user']['must_change_password']:
+        change_password(api, password, own_password(password))
     return api, r.data
 
 

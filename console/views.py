@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import User
 from core import tenancy, tokens
 from core.authentication import PlatformTokenAuthentication
 from core.exceptions import ApiError
@@ -18,6 +19,9 @@ from .serializers import (
     LOGIN_ID_RE, CountrySerializer, PlanSerializer, PlatformAuditSerializer, ResetAdminPasswordSerializer,
     StatusChangeSerializer, StatusHistorySerializer, TenantCreateSerializer, TenantSerializer,
 )
+
+
+LOCAL_ADDRESSES = ('127.0.0.1', '::1')
 
 
 def client_ip(request):
@@ -37,8 +41,9 @@ def platform_login(request):
     tenancy.act_as_platform()
     email = str(request.data.get('email', '')).strip()
     user = PlatformUser.objects.filter(email__iexact=email, is_active=True).first()
+    skip_totp = settings.PLATFORM_SKIP_TOTP_LOCAL and client_ip(request) in LOCAL_ADDRESSES
     ok = (user is not None and user.check_password(str(request.data.get('password', '')))
-          and pyotp.TOTP(user.mfa_secret).verify(str(request.data.get('totp', '')), valid_window=1))
+          and (skip_totp or pyotp.TOTP(user.mfa_secret).verify(str(request.data.get('totp', '')), valid_window=1)))
     if not ok:
         raise ApiError('Wrong email, password or authenticator code.', code='invalid_credentials', status_code=401)
     user.last_login_at = timezone.now()
@@ -93,6 +98,10 @@ class TenantDetail(PlatformView, generics.RetrieveUpdateAPIView):
         tenant = self.get_object()
         data = TenantSerializer(tenant).data
         data['status_history'] = StatusHistorySerializer(tenant.status_history.all(), many=True).data
+        data['administrators'] = [
+            {'id': u.id, 'login_id': u.username, 'email': u.email, 'is_active': u.is_active,
+             'last_login_at': u.last_login_at, 'must_change_password': u.must_change_password}
+            for u in User.objects.filter(tenant_id=tenant.id, role__key='administrator').order_by('id')]
         return Response(data)
 
 
@@ -145,6 +154,6 @@ class AuditList(PlatformView, generics.ListAPIView):
     serializer_class = PlatformAuditSerializer
 
     def get_queryset(self):
-        qs = PlatformAuditLog.objects.all()
+        qs = PlatformAuditLog.objects.select_related('platform_user', 'tenant')
         tenant = self.request.query_params.get('tenant')
         return qs.filter(tenant_id=tenant) if tenant else qs

@@ -23,6 +23,8 @@ def env_bool(name, default=False):
 
 
 DEBUG = env_bool('DEBUG', False)
+# Development only: Super Admin sign-in from this computer skips the authenticator code
+PLATFORM_SKIP_TOTP_LOCAL = DEBUG and env_bool('PLATFORM_SKIP_TOTP_LOCAL', True)
 SECRET_KEY = env('SECRET_KEY') or ('dev-only-insecure-key-never-use-in-production' if DEBUG or env('PYTEST_VERSION') else None)
 if not SECRET_KEY:
     raise RuntimeError('SECRET_KEY is required')
@@ -38,6 +40,9 @@ INSTALLED_APPS = [
     'outlets',
     'taxes',
     'payments',
+    'floor',
+    'catalogue',
+    'orders',
 ]
 
 MIDDLEWARE = [
@@ -100,7 +105,7 @@ REST_FRAMEWORK = {
 
 # ---- HTTP -------------------------------------------------------------------
 
-CORS_ALLOWED_ORIGINS = [o for o in env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',') if o]
+CORS_ALLOWED_ORIGINS = [o for o in env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3100').split(',') if o]
 from corsheaders.defaults import default_headers  # noqa: E402
 CORS_ALLOW_HEADERS = (*default_headers, 'idempotency-key', 'x-outlet-id', 'if-match')
 

@@ -5,7 +5,8 @@ from django.utils import timezone
 from accounts.models import SYSTEM_ROLES, AuthSession, Role, RolePermission, User
 from core import tenancy
 from core.exceptions import ApiError, Conflict
-from outlets.models import CashCounter, Outlet, PrintSettings, TenantSettings
+from outlets.models import TenantSettings
+from outlets.services import create_outlet
 from payments.models import PaymentMethod
 from taxes.models import Tax
 
@@ -104,10 +105,8 @@ def provision_tenant(*, name, business_type, country_code, outlet_name, admin_lo
             reporting_code=t.get('reporting_code', ''),
         )
 
-    outlet = Outlet.objects.create(code='MAIN', name=outlet_name,
-                                   type=OUTLET_TYPE_FOR_BUSINESS.get(business_type, 'restaurant'))
-    CashCounter.objects.create(outlet=outlet, name='Counter 1')
-    PrintSettings.objects.create(outlet=outlet, header={'name': outlet_name, 'taxIdLabel': country.tax_id_label})
+    create_outlet(code='MAIN', name=outlet_name, type=OUTLET_TYPE_FOR_BUSINESS.get(business_type, 'restaurant'),
+                  tax_id_label=country.tax_id_label)
 
     TenantStatusHistory.objects.create(tenant=tenant, from_status=None, to_status='pending',
                                        reason='Created', changed_by=created_by)

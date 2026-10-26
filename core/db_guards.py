@@ -38,13 +38,21 @@ LANGUAGE sql STABLE AS $$
 $$;
 
 -- The signed-in client's own record; pos_api can't read platform.tenants
-CREATE OR REPLACE FUNCTION app.current_tenant()
+-- Dropped first: CREATE OR REPLACE can't change the columns it returns
+DROP FUNCTION IF EXISTS app.current_tenant();
+CREATE FUNCTION app.current_tenant()
 RETURNS TABLE (id bigint, name text, status text, country_code text, currency_code text,
-               locale text, timezone text, language text, plan_features jsonb, feature_overrides jsonb)
+               locale text, timezone text, language text, plan_features jsonb, feature_overrides jsonb,
+               currency_symbol text, currency_decimals smallint, tax_id_label text, max_outlets int,
+               tax_reg_number text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, platform AS $$
   SELECT t.id, t.name, t.status, t.country_id, t.currency_id, t.locale, t.timezone, t.language,
-         coalesce(p.features, '{}'::jsonb), t.feature_overrides
-  FROM platform.tenants t LEFT JOIN platform.plans p ON p.id = t.plan_id
+         coalesce(p.features, '{}'::jsonb), t.feature_overrides,
+         cur.symbol, cur.decimals, co.tax_id_label, p.max_outlets, t.tax_reg_number
+  FROM platform.tenants t
+  LEFT JOIN platform.plans p ON p.id = t.plan_id
+  JOIN platform.currencies cur ON cur.code = t.currency_id
+  JOIN platform.countries co ON co.code = t.country_id
   WHERE t.id = app.current_tenant_id()
 $$;
 

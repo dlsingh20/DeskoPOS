@@ -5,7 +5,10 @@ from django.db import connection
 from rest_framework import authentication, exceptions
 
 from . import tenancy, tokens
-from .exceptions import ClientInactive
+from .exceptions import ApiError, ClientInactive
+
+# All an account on a temporary password can do until it sets its own
+PASSWORD_CHANGE_PATHS = ('/api/auth/me/', '/api/auth/change-password/', '/api/auth/logout/')
 
 
 def _bearer(request):
@@ -58,6 +61,8 @@ class ClientTokenAuthentication(authentication.BaseAuthentication):
         user = User.objects.select_related('role').filter(id=claims['sub'], is_active=True).first()
         if user is None:
             raise exceptions.AuthenticationFailed('This user is deactivated.', code='user_inactive')
+        if user.must_change_password and request.path not in PASSWORD_CHANGE_PATHS:
+            raise ApiError('Set your own password first.', code='password_change_required', status_code=403)
 
         request.tenant = tenant
         request.session_id = claims['sid']

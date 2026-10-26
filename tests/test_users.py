@@ -8,7 +8,7 @@ from accounts.views import use_approval
 from core import tenancy
 from core.exceptions import PermissionRequired
 
-from .conftest import sign_in
+from .conftest import own_password, sign_in
 
 
 def create_user(api, **body):
@@ -114,7 +114,7 @@ def test_manager_approves_with_pin(cashier_and_manager):
 def test_cashier_cannot_approve(cashier_and_manager):
     _, cashier = cashier_and_manager
     r = cashier.post('/api/pos/api/approvals/', {'permission': 'payment.credit', 'approver_username': 'sg_cash',
-                                                 'approver_secret': 'Cashier-pass-1'}, format='json')
+                                                 'approver_secret': own_password('Cashier-pass-1')}, format='json')
     assert r.status_code == 403 and r.data['code'] == 'cannot_approve'
 
 

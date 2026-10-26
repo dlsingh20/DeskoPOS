@@ -9,7 +9,7 @@ from outlets.models import CashCounter, Outlet, PrintSettings
 from payments.models import PaymentMethod
 from taxes.models import Tax
 
-from .conftest import platform_api_for, sign_in
+from .conftest import ADMIN_PASSWORD, platform_api_for, sign_in
 
 
 def test_client_ids_start_at_101(db):
@@ -63,7 +63,7 @@ def test_login_ids_are_unique_across_clients(make_client, platform_api):
     make_client()
     r = platform_api.post('/api/platform/tenants/', {
         'name': 'Copycat', 'country': 'GB', 'outlet_name': 'Copycat', 'admin_login_id': 'SG_Admin',
-        'admin_password': 'Another-pass-1'}, format='json')
+        'admin_password': 'Another-pass-1', 'admin_email': 'a@copycat.example'}, format='json')
     assert r.status_code == 409
     assert r.data['code'] == 'login_id_taken'
     check = platform_api.get('/api/platform/login-id-available/', {'login_id': 'sg_ADMIN'})
@@ -95,7 +95,8 @@ def test_deactivate_signs_everyone_out_and_reactivate_restores(client_admin, pla
     platform_api.post(f"/api/platform/tenants/{tenant['id']}/activate/", {}, format='json')
     detail = platform_api.get(f"/api/platform/tenants/{tenant['id']}/")
     assert [h['to_status'] for h in detail.data['status_history']] == ['pending', 'active', 'suspended', 'active']
-    sign_in('sg_admin', 'Admin-pass-1', mailoutbox, otp_trust=tokens.get('otp_trust'))
+    assert [a['login_id'] for a in detail.data['administrators']] == ['sg_admin']
+    sign_in('sg_admin', ADMIN_PASSWORD, mailoutbox, otp_trust=tokens.get('otp_trust'))
 
 
 def test_closed_client_cannot_be_reopened(make_client, platform_api):
@@ -110,7 +111,7 @@ def test_reset_admin_password(client_admin, platform_api, mailoutbox):
     r = platform_api.post(f"/api/platform/tenants/{tenant['id']}/reset-admin-password/",
                           {'login_id': 'sg_admin', 'new_password': 'Temp-pass-99'}, format='json')
     assert r.status_code == 200
-    _, body = sign_in('sg_admin', 'Temp-pass-99', mailoutbox, otp_trust=tokens.get('otp_trust'))
+    _, body = sign_in('sg_admin', 'Temp-pass-99', mailoutbox, otp_trust=tokens.get('otp_trust'), first_time=False)
     assert body['user']['must_change_password'] is True
 
 
@@ -129,3 +130,17 @@ def test_every_console_action_is_audited(make_client, platform_api):
     tenant = make_client()
     actions = [a['action'] for a in platform_api.get('/api/platform/audit/', {'tenant': tenant['id']}).data['results']]
     assert 'tenant.create' in actions and 'tenant.active' in actions
+
+
+def test_local_development_can_skip_the_authenticator_code(owner, settings):
+    from rest_framework.test import APIClient
+    body = {'email': owner.email, 'password': 'owner-password-123'}
+    assert APIClient().post('/api/platform/auth/login/', body, format='json').status_code == 401
+
+    settings.PLATFORM_SKIP_TOTP_LOCAL = True
+    assert APIClient().post('/api/platform/auth/login/', body, format='json').status_code == 200
+    # Still needed from any other computer, and the password is still checked
+    remote = APIClient(REMOTE_ADDR='203.0.113.9').post('/api/platform/auth/login/', body, format='json')
+    assert remote.status_code == 401
+    wrong = APIClient().post('/api/platform/auth/login/', {**body, 'password': 'nope'}, format='json')
+    assert wrong.status_code == 401

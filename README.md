@@ -6,12 +6,19 @@ The independent backend for the AppDesko POS: one PostgreSQL database for every 
 
 **Phase 0 (foundation) is built:**
 
-- Super Admin API: sign-in with an authenticator code, create a client (Client ID from 101, with its roles, Administrator, payment methods, country taxes, first outlet), activate / deactivate / close, reset the Administrator password, plans, countries, audit.
+- Super Admin console (`admin-console/`) and API: sign-in with an authenticator code, create a client (Client ID from 101, with its roles, Administrator, payment methods, country taxes, first outlet), activate / deactivate / close, reset the Administrator password, plans, countries, audit.
 - Client isolation in the database: Row Level Security on every client table, plus a same-client foreign key beside every link between client tables. A request can only see and change its own client's rows, even if the code forgets a filter.
 - Sign-in on one page for every client: the login ID (unique across all clients) finds the client. Emailed code for Administrators and Managers with 24 h device trust, lockout after repeated wrong passwords, rotating refresh tokens, sign-out, and sign-out everywhere when a client is deactivated.
 - Users & roles (Administrator, Manager, Cashier, Waiter, per-user access changes, outlet access, last-Administrator protection, safe delete), manager approvals with PIN or password (single use, 5 minutes), audit log.
 
-Next: Phase 1 (outlets, tables, products, taxes, orders, KOT, settle, payments, cash counters, history, print settings, StayDesko PMS connector). See the roadmap in `DESIGN.md`.
+**Phase 1 (parity), in progress:**
+
+- Done: restaurants (outlets, with the plan's outlet limit), client settings for the app (name, currency, time zone), tables (status, QR code secret), tax master, menus, categories (single rate or a tax list), menu items. Same paths and fields the POS app uses (`/api/pos/api/...`). Accounts on a temporary password can only set their own until they do.
+- Done: orders and KOT. Placing orders (priced from the menu, never from the app), one open order per table, table status following its orders, adding and changing items, numbered KOTs (`send_kot`, or automatically when an order is confirmed), voids and cancelling with a manager approval, kitchen statuses and stats. Order and KOT numbers restart each business day per restaurant. The bill calculation is in `orders/pricing.py`.
+- Done: billing and cash counters. Bill discounts (tax recalculated on the discounted amount, the cashier limit enforced with manager approval), settling in one transaction (split payments, cash change, tip, Credit Pay, invoice number, table freed; retries with the same idempotency key replay the first answer), part payments, Credit Pay collection (`/outstanding-orders/`), refunds with credit-note numbers, and cash counter shifts on `/api/accounting/` (open, blind close, cash in/out, takings by method). Every payment and refund belongs to the cashier's open shift.
+- Next: history and reports, print settings, StayDesko PMS connector (Guest Visit / room charge answers 409 until then).
+
+The POS app talks to this service with `npm run dev:deskopos` (port 3001).
 
 ## Run it
 
@@ -28,6 +35,19 @@ Without `DATABASE_URL` an embedded PostgreSQL 16 starts in `.pgdata/` (pgserver)
 
 Tests: `.venv/Scripts/python -m pytest`
 
+## Super Admin console
+
+A small React app in `admin-console/` for creating clients, activating and deactivating them, resetting the Administrator password and reading the activity log.
+
+```bash
+cd admin-console
+npm install
+npm run dev        # http://localhost:3100, talks to the service on http://localhost:8001
+npm test
+```
+
+Set `VITE_API_BASE_URL` when the service runs elsewhere. Sign in with the email, password and authenticator code from `create_platform_user`. Owners and admins can change clients; support staff can only look.
+
 ## Layout
 
 | Folder | What |
@@ -36,7 +56,8 @@ Tests: `.venv/Scripts/python -m pytest`
 | `core/` | Client scoping (`tenancy.py`), database guards applied after every migrate (`db_guards.py`), tokens, authentication, errors, base models |
 | `console/` | Super Admin: clients, plans, platform users, reference data (currencies, countries, permissions) |
 | `accounts/` | Client users, roles, sign-in, approvals, audit |
-| `outlets/`, `taxes/`, `payments/` | Outlets and client settings, taxes, payment methods (grow in Phase 1) |
+| `outlets/`, `floor/`, `catalogue/`, `taxes/`, `orders/`, `payments/` | Restaurants and client settings, tables, menus/categories/products, taxes, orders and KOTs, billing and cash counters (URLs in `config/pos_urls.py` and `config/accounting_urls.py`) |
+| `admin-console/` | Super Admin web console (React + Chakra UI) |
 | `tests/` | API and database tests, including the isolation guarantees |
 
 ## Rules for new code
