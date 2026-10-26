@@ -79,8 +79,9 @@ class PrintSettings(TenantModel):
     auto_print_bill = models.BooleanField(default=False)
     header = models.JSONField(default=dict, blank=True)
     footer = models.TextField(default='Thank you! Visit again.')
-    options = models.JSONField(default=dict, blank=True)
+    options = models.JSONField(default=dict, blank=True)  # tax labels on the bill, QR ordering mode
     updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
 
     class Meta:
         db_table = app_table('print_settings')

@@ -8,7 +8,7 @@ from accounts import audit
 from core.exceptions import ApiError, Conflict
 from core.permissions import read_or_require
 
-from .models import Outlet, TenantSettings
+from .models import Outlet, PrintSettings, TenantSettings
 from .services import create_outlet, next_outlet_code, outlets_for
 
 
@@ -161,3 +161,103 @@ def client_settings(request):
         'max_outlets': t['max_outlets'],
         **ClientSettingsSerializer(settings_row).data,
     })
+
+
+# ---- Print settings -------------------------------------------------------------
+
+FORMATS = ['thermal80', 'thermal58', 'sheet']
+LICENCE_RE = r'^[A-Za-z0-9][A-Za-z0-9 ./-]{2,29}$'
+
+
+class PrintHeaderSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, allow_blank=True, required=False, default='')
+    address = serializers.CharField(max_length=300, allow_blank=True, required=False, default='')
+    phone = serializers.CharField(max_length=40, allow_blank=True, required=False, default='')
+    tax_id_label = serializers.CharField(max_length=30, allow_blank=True, required=False, default='')
+    tax_id = serializers.CharField(max_length=30, allow_blank=True, required=False, default='')
+    licence_label = serializers.CharField(max_length=30, allow_blank=True, required=False, default='')
+    licence = serializers.RegexField(LICENCE_RE, allow_blank=True, required=False, default='', error_messages={
+        'invalid': 'Use 3 to 30 letters, digits, spaces, dots, dashes or slashes.'})
+    footer = serializers.CharField(max_length=200, allow_blank=True, required=False, default='')
+
+
+class TaxComponentSerializer(serializers.Serializer):
+    label = serializers.CharField(max_length=20, allow_blank=True)
+    share = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100)
+
+
+class PrintTaxSerializer(serializers.Serializer):
+    profile = serializers.CharField(max_length=10, allow_blank=True, required=False, default='')
+    invoice_title = serializers.CharField(max_length=40, allow_blank=True, required=False, default='')
+    receipt_title = serializers.CharField(max_length=40, allow_blank=True, required=False, default='')
+    mode = serializers.ChoiceField(choices=['single', 'split'], required=False, default='single')
+    single_label = serializers.CharField(max_length=20, allow_blank=True, required=False, default='')
+    components = TaxComponentSerializer(many=True, required=False, default=list)
+
+    def validate_components(self, value):
+        if len(value) > 4:
+            raise serializers.ValidationError('At most 4 tax lines.')
+        return value
+
+
+class PrintSettingsSerializer(serializers.Serializer):
+    bill_format = serializers.ChoiceField(choices=FORMATS)
+    kot_format = serializers.ChoiceField(choices=FORMATS)
+    sheet_size = serializers.ChoiceField(choices=['A4', 'Letter'])
+    header = PrintHeaderSerializer()
+    tax = PrintTaxSerializer(required=False, allow_null=True)
+    kot_copies = serializers.IntegerField(min_value=1, max_value=3)
+    auto_print_bill = serializers.BooleanField()
+    qr_orders_mode = serializers.ChoiceField(choices=['auto', 'accept'], required=False)
+
+
+def print_settings_payload(ps):
+    h = ps.header or {}
+    return {
+        'restaurant_id': ps.outlet_id,
+        'saved': ps.updated_by_id is not None,
+        'bill_format': ps.bill_format,
+        'kot_format': ps.kot_format,
+        'sheet_size': ps.sheet_size,
+        'header': {'name': h.get('name', ''), 'address': h.get('address', ''), 'phone': h.get('phone', ''),
+                   'tax_id_label': h.get('tax_id_label', h.get('taxIdLabel', '')), 'tax_id': h.get('tax_id', ''),
+                   'licence_label': h.get('licence_label', ''), 'licence': h.get('licence', ''), 'footer': ps.footer},
+        'tax': (ps.options or {}).get('tax'),
+        'kot_copies': ps.kot_copies,
+        'auto_print_bill': ps.auto_print_bill,
+        'qr_orders_mode': (ps.options or {}).get('qr_orders_mode', 'auto'),
+        'updated_at': serializers.DateTimeField().to_representation(ps.updated_at),
+        'updated_by': {'id': ps.updated_by.id, 'name': ps.updated_by.full_name} if ps.updated_by else None,
+    }
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([read_or_require('settings.manage')])
+def print_settings(request, pk):
+    """Bill header, tax labels and formats shared by every device of a restaurant."""
+    outlet = generics.get_object_or_404(outlets_for(request.user), pk=pk)
+    ps, _ = PrintSettings.objects.get_or_create(outlet=outlet, defaults={'header': {'name': outlet.name}})
+    if request.method == 'PUT':
+        body = PrintSettingsSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+        ps = PrintSettings.objects.select_for_update().get(id=ps.id)
+        header = dict(data['header'])
+        ps.footer = header.pop('footer').strip()
+        header['tax_id'] = header['tax_id'].upper()
+        ps.header = {k: v.strip() for k, v in header.items()}
+        for field in ('bill_format', 'kot_format', 'sheet_size', 'kot_copies', 'auto_print_bill'):
+            setattr(ps, field, data[field])
+        options = dict(ps.options or {})
+        if data.get('tax') is not None:
+            options['tax'] = {**data['tax'], 'components': [{'label': c['label'], 'share': float(c['share'])}
+                                                            for c in data['tax']['components']]}
+        if data.get('qr_orders_mode'):
+            options['qr_orders_mode'] = data['qr_orders_mode']
+        ps.options = options
+        ps.updated_by = request.user
+        ps.save()
+        audit.record(request, 'print_settings.update', 'outlet', outlet.id,
+                     after={'bill_format': ps.bill_format, 'kot_format': ps.kot_format})
+        ps = PrintSettings.objects.select_related('updated_by').get(id=ps.id)
+    return Response(print_settings_payload(ps))

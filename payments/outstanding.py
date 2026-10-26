@@ -78,6 +78,7 @@ def account_payload(a, request, with_notes=False):
         'created_by_name': a.created_by.full_name,
         'order_time': when(order.created_at),
         'created_at': when(a.created_at),
+        'updated_at': when(a.updated_at),
     }
     if with_notes:
         data['notes'] = [{'id': n.id, 'note_type': n.note_type, 'contact_method': n.contact_method or None,

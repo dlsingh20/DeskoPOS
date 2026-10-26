@@ -5,6 +5,8 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from outlets.models import TenantSettings
+from outlets.services import outlets_for
+from payments.models import Shift
 
 from . import pricing
 from .models import OPEN_STATUSES, NumberSequence, Order, OrderEvent
@@ -18,6 +20,22 @@ def business_date(outlet, tenant, now=None):
     if isinstance(close, str):
         close = datetime.strptime(close, '%H:%M').time()
     return (local - timedelta(days=1)).date() if local.time() < close else local.date()
+
+
+def history_start(request):
+    """
+    Where a user without history.full may look back to: the later of midnight today
+    (client time zone) and the last cash counter close. None means no limit.
+    Same rule as the app's History screen.
+    """
+    if request.user.has_perm('history.full'):
+        return None
+    now = timezone.now()
+    today = now.astimezone(ZoneInfo(request.tenant.get('timezone') or 'UTC')).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    last_close = (Shift.objects.filter(status='closed', outlet__in=outlets_for(request.user), closed_at__lte=now)
+                  .order_by('-closed_at').values_list('closed_at', flat=True).first())
+    return last_close if last_close and last_close > today else today
 
 
 def next_number(outlet, kind, period):

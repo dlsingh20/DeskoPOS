@@ -25,7 +25,7 @@ from payments.services import payment_payload
 
 from . import pricing
 from .models import OPEN_STATUSES, ItemVoid, Kot, Order, OrderItem, OrderItemTax
-from .services import business_date, new_order_number, next_number, recalculate, record, sync_table
+from .services import business_date, history_start, new_order_number, next_number, recalculate, record, sync_table
 
 KITCHEN_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served']
 ITEM_STATUS_FOR_ORDER = {'preparing': 'preparing', 'ready': 'ready', 'served': 'served'}
@@ -110,7 +110,8 @@ def order_payload(order, request):
         'customer_email': order.customer_email,
         'room_number': order.room_number,
         'notes': order.notes,
-        'server': person(order.server),
+        'server': order.server_id,
+        'server_name': order.server.full_name if order.server else None,
         'waiter_name': order.server.full_name if order.server else None,
         'created_by': person(order.created_by),
         'created_by_name': order.created_by.full_name if order.created_by else None,
@@ -148,7 +149,12 @@ def order_payload(order, request):
 
 
 def _orders(request):
-    return (Order.objects.filter(outlet__in=outlets_for(request.user))
+    qs = Order.objects.filter(outlet__in=outlets_for(request.user))
+    start = history_start(request)
+    if start:
+        # Without history.full: open orders, and bills closed inside the user's history window
+        qs = qs.filter(Q(status__in=OPEN_STATUSES) | Q(closed_at__gte=start) | Q(cancelled_at__gte=start))
+    return (qs
             .select_related('outlet', 'table', 'server', 'created_by', 'closed_by', 'cancelled_by',
                             'cancel_approved_by', 'discounted_by', 'discount_approved_by')
             .prefetch_related('items__taxes', 'items__kot', 'payments__payment_method', 'payments__received_by', 'tips'))

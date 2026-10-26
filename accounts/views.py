@@ -301,3 +301,25 @@ def use_approval(request, approval_id, permission_key, order_id=None):
     approval.used_at = timezone.now()
     approval.save(update_fields=['used_at'])
     return approval
+
+
+@api_view(['GET'])
+def staff(request):
+    """
+    Names for waiter pickers, History and Reports, readable by every client user
+    (/api/auth/users/ needs users.manage). ?active=all includes people who left.
+    """
+    params = request.query_params
+    qs = User.objects.select_related('role').prefetch_related('outlet_links').order_by('first_name', 'username')
+    if params.get('active', 'true') != 'all':
+        qs = qs.filter(is_active=params.get('active', 'true') != 'false')
+    if params.get('role'):
+        qs = qs.filter(role__key=params['role'])
+    people = list(qs)
+    if params.get('restaurant_id'):
+        wanted = str(params['restaurant_id'])
+        people = [u for u in people
+                  if not u.outlet_links.all() or any(str(link.outlet_id) == wanted for link in u.outlet_links.all())]
+    results = [{'id': u.id, 'name': u.full_name, 'login_id': u.username, 'role': u.role.key, 'role_name': u.role.name,
+                'is_active': u.is_active} for u in people]
+    return Response({'count': len(results), 'next': None, 'previous': None, 'results': results})

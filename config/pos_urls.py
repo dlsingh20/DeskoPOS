@@ -4,6 +4,7 @@ from django.urls import path
 from accounts import views as accounts
 from catalogue import views as catalogue
 from floor import views as floor
+from orders import reports
 from orders import views as orders
 from outlets import views as outlets
 from payments import outstanding
@@ -15,6 +16,10 @@ urlpatterns = [
     path('settings/', outlets.client_settings),
     path('restaurants/', outlets.RestaurantList.as_view()),
     path('restaurants/<int:pk>/', outlets.RestaurantDetail.as_view()),
+    path('restaurants/<int:pk>/print-settings/', outlets.print_settings),
+    path('staff/', accounts.staff),
+    path('reports/top_items', reports.top_items),
+    path('reports/top_items/', reports.top_items),
     path('tables/', floor.TableList.as_view()),
     path('tables/by_restaurant/', floor.tables_by_restaurant),
     path('tables/free_stale_tables/', floor.free_stale_tables),
