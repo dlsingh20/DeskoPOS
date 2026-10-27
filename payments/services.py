@@ -76,6 +76,17 @@ def payment_payload(p, decimals):
     }
 
 
+def refund_payload(r, decimals):
+    m = lambda v: money_str(v, decimals)  # noqa: E731
+    return {
+        'id': r.id, 'credit_note_number': r.credit_note_number, 'amount': m(r.amount), 'reason': r.reason,
+        'note': r.note, 'refunded_by': person(r.refunded_by), 'approved_by': person(r.approved_by),
+        'created_at': when(r.created_at), 'cash_register': r.shift_id,
+        'lines': [{'payment_id': rl.payment_id, 'method': rl.method, 'amount': m(rl.amount), 'reference': rl.reference}
+                  for rl in r.lines.all()],
+    }
+
+
 # ---- Cash counter shifts ------------------------------------------------------
 
 def open_shift_of(user):

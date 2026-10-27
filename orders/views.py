@@ -21,7 +21,7 @@ from core.pagination import StandardPagination
 from floor.models import DiningTable
 from outlets.services import outlets_for
 from outlets.views import outlet_from_param
-from payments.services import payment_payload
+from payments.services import payment_payload, refund_payload
 
 from . import pricing
 from .models import OPEN_STATUSES, ItemVoid, Kot, Order, OrderItem, OrderItemTax
@@ -133,6 +133,7 @@ def order_payload(order, request):
         'amount_due': m(order.amount_due),
         'payments': [payment_payload(p, decimals) for p in order.payments.all()],
         'tip_amount': m(sum((t.amount for t in order.tips.all()), pricing.ZERO)),
+        'refunds': [refund_payload(r, decimals) for r in order.refunds.all()],
         'invoice_number': order.invoice_number or None,
         'order_time': when(order.created_at),
         'created_at': when(order.created_at),
@@ -157,7 +158,8 @@ def _orders(request):
     return (qs
             .select_related('outlet', 'table', 'server', 'created_by', 'closed_by', 'cancelled_by',
                             'cancel_approved_by', 'discounted_by', 'discount_approved_by')
-            .prefetch_related('items__taxes', 'items__kot', 'payments__payment_method', 'payments__received_by', 'tips'))
+            .prefetch_related('items__taxes', 'items__kot', 'payments__payment_method', 'payments__received_by', 'tips',
+                              'refunds__lines', 'refunds__refunded_by', 'refunds__approved_by'))
 
 
 def _locked_order(request, pk, must_be_open=True):

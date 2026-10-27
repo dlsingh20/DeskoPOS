@@ -28,7 +28,7 @@ from outlets.services import outlets_for
 from .models import OutstandingAccount, Payment, Refund, RefundLine, Tip
 from .services import (
     APP_METHODS, ZERO, decimals_of, document_number, open_shift_of, payment_method_for, payment_payload, person,
-    remember, replay, shift_for_payment, when,
+    refund_payload, remember, replay, shift_for_payment, when,
 )
 
 UNPROCESSABLE = 422
@@ -415,13 +415,7 @@ def refund(request, pk):
     response = Response({
         'id': order.id, 'status': order.status, 'total_amount': m(order.total_amount), 'amount_paid': m(order.amount_paid),
         'refunded_total': m(refunded_total),
-        'refund': {
-            'id': row.id, 'credit_note_number': row.credit_note_number, 'amount': m(row.amount), 'reason': row.reason,
-            'note': row.note, 'refunded_by': person(request.user), 'approved_by': person(row.approved_by),
-            'created_at': when(row.created_at), 'cash_register': row.shift_id,
-            'lines': [{'payment_id': rl.payment_id, 'method': rl.method, 'amount': m(rl.amount), 'reference': rl.reference}
-                      for rl in row.lines.all()],
-        },
+        'refund': refund_payload(row, decimals),
         'payments': [payment_payload(p, decimals) for p in order.payments.select_related('payment_method', 'received_by')],
     })
     return remember(request, endpoint, response)

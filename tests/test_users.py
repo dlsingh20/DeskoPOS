@@ -61,6 +61,29 @@ def test_per_user_access_changes(client_admin):
     assert bad.status_code == 400
 
 
+def test_user_list_shows_effective_access(client_admin):
+    _, api, _ = client_admin
+    create_user(api, login_id='sg_cash', role='cashier', password='Cashier-pass-1', email='',
+                permission_overrides={'reports.view': True, 'bill.reprint': False})
+    create_user(api, login_id='sg_cash2', role='cashier', password='Cashier-pass-1', email='')  # blank emails don't clash
+    people = {u['login_id']: u for u in api.get('/api/auth/users/').data['results']}
+    assert people['sg_cash']['permissions'] == ['bill.settle', 'reports.view'] and people['sg_cash']['email'] is None
+    assert people['sg_cash2']['permissions'] == ['bill.reprint', 'bill.settle']
+
+    edited = api.patch(f"/api/auth/users/{people['sg_cash']['id']}/", {'role': 'manager', 'email': 'm@spice.example',
+                                                                          'permission_overrides': {}}, format='json')
+    assert edited.status_code == 200 and 'users.manage' not in edited.data['permissions']
+    assert 'reports.view' in edited.data['permissions'] and edited.data['permission_overrides'] == {}
+
+
+def test_admin_sets_a_temporary_password(client_admin):
+    _, api, _ = client_admin
+    user = create_user(api, login_id='sg_cash', role='cashier', password='Cashier-pass-1').data
+    assert api.post(f"/api/auth/users/{user['id']}/set-password/", {'password': 'Temp-pass-77'}, format='json').status_code == 200
+    _, body = sign_in('sg_cash', 'Temp-pass-77')
+    assert body['user']['must_change_password'] is True
+
+
 def test_last_administrator_is_protected(client_admin):
     _, api, body = client_admin
     me = body['user']['id']

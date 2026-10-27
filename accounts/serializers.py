@@ -84,7 +84,11 @@ class UserSerializer(serializers.ModelSerializer):
         data['permission_overrides'] = {o.permission_id: o.granted for o in user.permission_overrides.all()}
         data['outlet_ids'] = [link.outlet_id for link in user.outlet_links.all()]
         data['can_login'] = user.role.can_login
+        data['permissions'] = sorted(user.permission_keys)  # role plus this user's changes
         return data
+
+    def validate_email(self, value):
+        return value or None  # blank means no email (the unique email rule skips NULL)
 
     def validate_login_id(self, value):
         if login_id_taken(value, exclude_user_id=self.instance.id if self.instance else None):

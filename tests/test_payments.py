@@ -264,3 +264,7 @@ def test_manager_refunds_cash_from_their_counter(staff):
         'refunds': [{'payment_id': cash_payment, 'amount': '500.00'},
                     {'payment_id': paid['payments'][1]['id'], 'amount': '50.00'}], 'reason': 'service'}, format='json')
     assert rest.status_code == 200 and rest.data['status'] == 'refunded'
+    seen = manager.get(f"{POS}/orders/{order['id']}/").data
+    assert [(r['amount'], r['reason'], r['refunded_by']['id']) for r in seen['refunds']] == [
+        ('500.00', 'food_quality', r.data['refund']['refunded_by']['id']), ('550.00', 'service', r.data['refund']['refunded_by']['id'])]
+    assert seen['refunds'][0]['note'] == 'Dal was cold' and seen['refunds'][1]['lines'][1]['amount'] == '50.00'
