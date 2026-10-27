@@ -1,6 +1,6 @@
-# AppDesko POS service
+# DeskoPOS
 
-The independent backend for the AppDesko POS: one PostgreSQL database for every client, a Python (Django + DRF) API, and the Super Admin API. The design is in `docs/DESIGN.md`; `docs/schema.sql` is the reference schema it was tested with (the Django models and migrations are the source of truth from now on).
+Everything for DeskoPOS, the independent POS for restaurants and cafes: the service (one PostgreSQL database for every client, a Python Django + DRF API, and the Super Admin API), the POS app staff use (`app/`) and the Super Admin console (`admin-console/`). Nothing depends on StayDesko. The design is in `docs/DESIGN.md`; `docs/schema.sql` is the reference schema it was tested with (the Django models and migrations are the source of truth from now on).
 
 ## Status
 
@@ -21,7 +21,7 @@ The independent backend for the AppDesko POS: one PostgreSQL database for every 
 - Not connected to StayDesko: Guest Visit (room charge) answers 409 and will be built later.
 - Next: real email sending for sign-in codes, hosting (managed PostgreSQL, backups, HTTPS). Planned: server-side history and reports (`/orders/history/`, `/reports/{report}/`) for long periods, realtime updates.
 
-The POS app talks to this service with `npm run dev:deskopos` (port 3001).
+The POS app is in `app/` (see below).
 
 ## Run it
 
@@ -31,12 +31,23 @@ python -m venv .venv
 set DEBUG=1                                           # bash: export DEBUG=1
 .venv/Scripts/python manage.py migrate
 .venv/Scripts/python manage.py create_platform_user you@appdesko.com --name "Your Name"
-.venv/Scripts/python manage.py runserver 8000
+.venv/Scripts/python manage.py runserver 8001
 ```
 
 Without `DATABASE_URL` an embedded PostgreSQL 16 starts in `.pgdata/` (pgserver), so nothing else needs installing. `create_platform_user` prints an `otpauth://` link: add it to an authenticator app, because Super Admin sign-in needs the code.
 
 Tests: `.venv/Scripts/python -m pytest`
+
+## POS app
+
+The screens restaurant staff use, in `app/` (React + Chakra UI). Details and build settings in `app/README.md`.
+
+```bash
+cd app
+npm install
+npm run dev        # http://localhost:3001, talks to the service on http://localhost:8001
+npm test
+```
 
 ## Super Admin console
 
@@ -60,6 +71,7 @@ Set `VITE_API_BASE_URL` when the service runs elsewhere. Sign in with the email,
 | `console/` | Super Admin: clients, plans, platform users, reference data (currencies, countries, permissions) |
 | `accounts/` | Client users, roles, sign-in, approvals, audit |
 | `outlets/`, `floor/`, `catalogue/`, `taxes/`, `orders/`, `payments/` | Restaurants and client settings, tables, menus/categories/products, taxes, orders and KOTs, billing and cash counters (URLs in `config/pos_urls.py` and `config/accounting_urls.py`) |
+| `app/` | POS app for restaurant staff (React + Chakra UI) |
 | `admin-console/` | Super Admin web console (React + Chakra UI) |
 | `tests/` | API and database tests, including the isolation guarantees |
 

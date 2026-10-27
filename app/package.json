@@ -1,0 +1,67 @@
+{
+  "name": "deskopos-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeskoPOS point of sale app for restaurants and cafes",
+  "dependencies": {
+    "@chakra-ui/icons": "^2.1.1",
+    "@chakra-ui/react": "^2.10.7",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.0.1",
+    "@mui/material": "^7.0.1",
+    "@mui/x-date-pickers": "^7.28.3",
+    "axios": "^1.8.4",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^10.18.0",
+    "lucide-react": "^0.440.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.4.1",
+    "react-scripts": "5.0.1",
+    "recharts": "^3.1.0",
+    "serve": "^14.2.1"
+  },
+  "scripts": {
+    "start": "serve -s build -l tcp://0.0.0.0:${PORT:-3005}",
+    "dev": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^axios$": "axios/dist/node/axios.cjs"
+    }
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "ajv": "^8.17.1",
+    "typescript": "^4.9.5"
+  },
+  "homepage": "."
+}
