@@ -28,7 +28,10 @@ PLATFORM_SKIP_TOTP_LOCAL = DEBUG and env_bool('PLATFORM_SKIP_TOTP_LOCAL', True)
 SECRET_KEY = env('SECRET_KEY') or ('dev-only-insecure-key-never-use-in-production' if DEBUG or env('PYTEST_VERSION') else None)
 if not SECRET_KEY:
     raise RuntimeError('SECRET_KEY is required')
-ALLOWED_HOSTS = [h for h in env('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',') if h]
+ALLOWED_HOSTS = [h.strip() for h in env('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',') if h.strip()]
+# On Railway, always accept its health-check probe and the service's own public domain
+if env('RAILWAY_ENVIRONMENT'):
+    ALLOWED_HOSTS += [h for h in ('healthcheck.railway.app', env('RAILWAY_PUBLIC_DOMAIN')) if h and h not in ALLOWED_HOSTS]
 
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
@@ -105,7 +108,7 @@ REST_FRAMEWORK = {
 
 # ---- HTTP -------------------------------------------------------------------
 
-CORS_ALLOWED_ORIGINS = [o for o in env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3100').split(',') if o]
+CORS_ALLOWED_ORIGINS = [o.strip() for o in env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3100').split(',') if o.strip()]
 from corsheaders.defaults import default_headers  # noqa: E402
 CORS_ALLOW_HEADERS = (*default_headers, 'idempotency-key', 'x-outlet-id', 'if-match')
 
