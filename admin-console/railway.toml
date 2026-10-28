@@ -1,0 +1,11 @@
+# Super Admin console on Railway (service root directory: admin-console/).
+# VITE_API_BASE_URL must be set on the service; Vite bakes it in at build time.
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npx --yes serve@14.2.4 -s dist -l tcp://0.0.0.0:$PORT"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"

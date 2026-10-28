@@ -1,0 +1,13 @@
+# DeskoPOS service (API) on Railway. The POS app and the Super Admin console
+# are separate Railway services with their root directory set to app/ and
+# admin-console/ (each has its own railway.toml).
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+# Migrations run as the schema owner (pos_owner) before each release starts.
+preDeployCommand = "python manage.py migrate --noinput"
+startCommand = "gunicorn config.wsgi --bind 0.0.0.0:$PORT --workers 3 --timeout 60"
+healthcheckPath = "/health/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
