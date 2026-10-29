@@ -27,6 +27,8 @@ import {
   Spinner,
   Center,
   ButtonGroup,
+  Grid,
+  useBreakpointValue,
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
@@ -46,7 +48,7 @@ import { getDiscountInfo } from '../../services/DiscountService';
 import { useCashCounter } from '../../context/CashCounterContext';
 
 const SectionLabel = ({ children }) => (
-  <Text fontSize="xs" fontWeight="800" letterSpacing="0.06em" color="gray.500" textTransform="uppercase" mb={2}>
+  <Text fontSize="xs" fontWeight="800" letterSpacing="0.06em" color="gray.500" textTransform="uppercase" mb={1.5}>
     {children}
   </Text>
 );
@@ -80,6 +82,9 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
   useModal(isOpen, 'SettlePaymentModal');
 
   const headerBg = useColorModeValue('white', 'gray.800');
+  // Layout follows the screen, never a fixed resolution: full screen on phones, one column on
+  // narrow tablets, and the bill summary beside the payment fields from tablet landscape up
+  const modalSize = useBreakpointValue({ base: 'full', md: 'xl', lg: '4xl' }, { fallback: 'xl' });
   const mutedColor = useColorModeValue('gray.500', 'gray.400');
   const methodBg = useColorModeValue('gray.50', 'gray.700');
   const methodBorder = useColorModeValue('gray.200', 'gray.600');
@@ -254,7 +259,11 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
   const handleSettle = async () => {
     if (submittingRef.current) return;
     setShowErrors(true);
-    if (!isValid || !order) return;
+    if (!isValid || !order) {
+      // Point the cashier at the cash field when that's what's missing
+      if (errors.cash) cashInputRef.current?.focus();
+      return;
+    }
     if (!can('bill.settle')) {
       setSubmitError('Your role cannot settle bills. Ask a Manager.');
       return;
@@ -391,25 +400,32 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
         isOpen={isOpen}
         onClose={handleCancel}
         isCentered
-        size="xl"
+        size={modalSize}
         scrollBehavior="inside"
         closeOnOverlayClick={false}
         closeOnEsc={!submitting}
       >
         <ModalOverlay bg="blackAlpha.500" backdropFilter="blur(2px)" />
-        <ModalContent borderRadius="20px" overflow="hidden" mx={3}>
+        <ModalContent
+          borderRadius={{ base: 0, md: '20px' }}
+          overflow="hidden"
+          mx={{ base: 0, md: 3 }}
+          maxH={{ base: '100%', md: 'calc(100% - 2rem)' }}
+          // Touch screens keep finger-sized controls, whatever the screen size
+          sx={{ '@media (pointer: coarse)': { 'button, input, select': { minHeight: '40px' } } }}
+        >
           {/* Header */}
-          <Flex px={6} pt={5} pb={4} bg={headerBg} borderBottomWidth="1px" justify="space-between" align="flex-start" gap={4}>
+          <Flex px={6} pt={4} pb={3} bg={headerBg} borderBottomWidth="1px" justify="space-between" align="flex-start" gap={4}>
             <Box>
               <Text fontSize="xl" fontWeight="800">Complete Payment</Text>
               <Text fontSize="sm" color={mutedColor}>
-                {isTakeaway ? 'Settle takeaway bill & record tips' : 'Settle table invoice & record tips'}
+                {isTakeaway ? 'Takeaway bill' : 'Table bill'}
+                {order && (
+                  <Text as="span" fontWeight="600">
+                    {' · '}{order.table_number ? `Table ${order.table_number} · ` : ''}Order {order.order_number}
+                  </Text>
+                )}
               </Text>
-              {order && (
-                <Text fontSize="xs" color={mutedColor} mt={1} fontWeight="600">
-                  {order.table_number ? `Table ${order.table_number} · ` : ''}Order {order.order_number}
-                </Text>
-              )}
             </Box>
             <Box textAlign="right">
               <Text fontSize="xs" color={mutedColor} fontWeight="600">Grand Total</Text>
@@ -422,17 +438,22 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
             </Box>
           </Flex>
 
-          <ModalBody px={6} py={5}>
+          <ModalBody px={6} py={4}>
             {loading ? (
               <Center py={16}><Spinner color="blue.500" /></Center>
             ) : loadError ? (
               <Alert status="error" borderRadius="10px"><AlertIcon />{loadError}</Alert>
             ) : order && (
-              <VStack align="stretch" spacing={5}>
+              <Grid
+                templateColumns={{ base: 'minmax(0, 1fr)', lg: 'minmax(0, 3fr) minmax(0, 2fr)' }}
+                gap={{ base: 3, lg: 6 }}
+                alignItems="start"
+              >
+              <VStack align="stretch" spacing={3}>
                 {/* Payment method */}
                 <Box as="fieldset" aria-label="Select payment method">
                   <SectionLabel>Select payment method</SectionLabel>
-                  <SimpleGrid columns={{ base: 2, sm: 3 }} spacing={2.5} role="radiogroup">
+                  <SimpleGrid columns={{ base: 3, sm: 4 }} spacing={2} role="radiogroup">
                     {SETTLEMENT_METHODS.map((m) => {
                       const selected = m.key === methodKey;
                       return (
@@ -440,8 +461,9 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                           key={m.key}
                           role="radio"
                           aria-checked={selected}
-                          h="48px"
-                          borderRadius="12px"
+                          h="36px"
+                          size="sm"
+                          borderRadius="10px"
                           fontWeight="700"
                           bg={selected ? selectedBg : methodBg}
                           color={selected ? 'white' : undefined}
@@ -468,9 +490,10 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                 ) : methodKey === 'cash' ? (
                   <Box>
                     <SimpleGrid columns={2} spacing={3}>
-                      <FormControl isInvalid={!!shown('cash') && received !== null}>
+                      {/* While typing, flag only a wrong amount; after Settle is pressed, an empty field too */}
+                      <FormControl isRequired isInvalid={!!shown('cash') && (received !== null || showErrors)}>
                         <FormLabel fontSize="xs" fontWeight="800" letterSpacing="0.06em" color={mutedColor} mb={1}>CASH RECEIVED</FormLabel>
-                        <InputGroup size="lg">
+                        <InputGroup size="md">
                           <InputLeftElement pointerEvents="none" color={mutedColor}>{currency}</InputLeftElement>
                           <Input
                             ref={cashInputRef}
@@ -485,7 +508,7 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                             placeholder={amountDue.toFixed(2)}
                             aria-label="Cash received"
                             fontWeight="700"
-                            borderRadius="12px"
+                            borderRadius="10px"
                           />
                         </InputGroup>
                         <FormErrorMessage>{errors.cash}</FormErrorMessage>
@@ -493,15 +516,15 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                       <FormControl>
                         <FormLabel fontSize="xs" fontWeight="800" letterSpacing="0.06em" color={mutedColor} mb={1}>RETURN CASH</FormLabel>
                         <Flex
-                          h="48px"
+                          h="40px"
                           align="center"
                           px={4}
-                          borderRadius="12px"
+                          borderRadius="10px"
                           bg={returnBg}
                           borderWidth="1px"
                           borderColor={returnBorder}
                           fontWeight="800"
-                          fontSize="lg"
+                          fontSize="md"
                           color={cashChange !== null && cashChange < 0 ? 'red.500' : 'green.700'}
                           aria-live="polite"
                           aria-label="Return cash"
@@ -597,9 +620,10 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                 {methodKey !== 'credit_pay' && (
                   <Box>
                     <SectionLabel>Guest details (optional)</SectionLabel>
-                    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2.5}>
+                    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2}>
                       <FormControl>
                         <Input
+                          size="sm"
                           placeholder="Guest name"
                           aria-label="Guest name"
                           value={customerName}
@@ -613,6 +637,7 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                         <Input
                           type="tel"
                           inputMode="tel"
+                          size="sm"
                           placeholder="Mobile number"
                           aria-label="Guest mobile number"
                           value={customerPhone}
@@ -629,11 +654,11 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
 
                 {/* Tip */}
                 <Box>
-                  <Divider mb={4} />
+                  <Divider mb={3} />
                   <SectionLabel>Tip &amp; waiter attribution</SectionLabel>
-                  <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2.5}>
+                  <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2}>
                     <FormControl isInvalid={!!shown('tip')}>
-                      <InputGroup>
+                      <InputGroup size="sm">
                         <InputLeftElement pointerEvents="none" color={mutedColor}>{currency}</InputLeftElement>
                         <Input
                           type="number"
@@ -652,6 +677,7 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                     </FormControl>
                     <FormControl isInvalid={!!shown('tipWaiter')}>
                       <Select
+                        size="sm"
                         placeholder={staffError ? 'Staff list unavailable' : 'Tip Waiter'}
                         aria-label="Tip waiter"
                         value={tipWaiterId}
@@ -667,6 +693,7 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                     </FormControl>
                     <FormControl isInvalid={!!shown('tipMethod')}>
                       <Select
+                        size="sm"
                         placeholder="Tip Method"
                         aria-label="Tip method"
                         value={tipMethodKey}
@@ -680,9 +707,13 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                   </SimpleGrid>
                 </Box>
 
+              </VStack>
+
+              {/* Bill summary: beside the payment fields on wide screens, below them otherwise */}
+              <VStack align="stretch" spacing={3} position={{ lg: 'sticky' }} top={0}>
                 {/* Summary */}
-                <Box bg={summaryBg} borderRadius="12px" px={4} py={3} fontSize="sm">
-                  <VStack align="stretch" spacing={1}>
+                <Box bg={summaryBg} borderRadius="12px" px={4} py={2.5} fontSize="sm">
+                  <VStack align="stretch" spacing={0.5}>
                     <Row label="Subtotal" value={formatPrice(order.subtotal || 0)} />
                     <DiscountLine
                       order={order}
@@ -722,23 +753,24 @@ const SettlePaymentModal = ({ isOpen, onClose, orderId, onSettled }) => {
                   </Alert>
                 )}
               </VStack>
+              </Grid>
             )}
           </ModalBody>
 
-          <ModalFooter px={6} py={4} gap={3} borderTopWidth="1px">
-            <Button flex={1} h="48px" variant="outline" borderRadius="12px" onClick={handleCancel} isDisabled={submitting}>
+          <ModalFooter px={6} py={3} gap={3} borderTopWidth="1px">
+            <Button flex={1} h="42px" variant="outline" borderRadius="12px" onClick={handleCancel} isDisabled={submitting}>
               Cancel
             </Button>
             <Button
               flex={1}
-              h="48px"
+              h="42px"
               colorScheme={methodKey === 'credit_pay' ? 'orange' : 'green'}
               borderRadius="12px"
               fontWeight="800"
               onClick={handleSettle}
               isLoading={submitting}
               loadingText="Processing…"
-              isDisabled={!order || loading || discountStale || (showErrors && !isValid)}
+              isDisabled={!order || loading || discountStale}
             >
               {settleLabel}
             </Button>
