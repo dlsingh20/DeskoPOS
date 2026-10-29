@@ -77,6 +77,9 @@ const CurrentOrderSummary = ({
   const draftSubtotal = draft.reduce((sum, line) => sum + (parseFloat(line.menuItem.price) || 0) * line.quantity, 0);
   const num = (value) => parseFloat(value) || 0;
 
+  // Merged bill: show which table ordered each line (the printed bill stays one list)
+  const merged = (order?.linked_tables || []).length > 0;
+
   return (
     <Flex direction="column" h="full" minH={0}>
       <Box flex={1} overflowY="auto" minH={0} pr={1}>
@@ -102,6 +105,9 @@ const CurrentOrderSummary = ({
                           </Text>
                           {ITEM_STATUS_COLORS[item.status] && (
                             <Badge colorScheme={ITEM_STATUS_COLORS[item.status]} fontSize="2xs">{item.status}</Badge>
+                          )}
+                          {merged && item.table_number && (
+                            <Badge variant="outline" fontSize="2xs" flexShrink={0}>Table {item.table_number}</Badge>
                           )}
                         </HStack>
                         <Text fontSize="xs" color={mutedColor}>

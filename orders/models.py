@@ -9,7 +9,8 @@ from django.db import models
 from core.models import MONEY, RATE, TenantModel, TimestampedModel, app_table
 
 OPEN_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served']
-CLOSED_STATUSES = ['completed', 'outstanding', 'cancelled', 'refunded']  # outstanding = Credit Pay
+# outstanding = Credit Pay; merged = its items went into another table's order (not a cancellation)
+CLOSED_STATUSES = ['completed', 'outstanding', 'cancelled', 'refunded', 'merged']
 
 
 class NumberSequence(TenantModel):
@@ -71,6 +72,7 @@ class Order(TenantModel, TimestampedModel):
                                            related_name='+')
     cancel_reason = models.TextField(blank=True, default='')
     invoice_number = models.TextField(blank=True, default='')
+    merged_into = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
     version = models.IntegerField(default=1)  # bumped on every change; If-Match support later
 
     class Meta:
@@ -92,9 +94,26 @@ class Order(TenantModel, TimestampedModel):
         return max(self.total_amount - self.amount_paid, 0)
 
 
+class OrderTable(TenantModel):
+    """
+    A table merged into another table's order: it keeps taking orders and its KOTs carry
+    its own name, but everything goes on the one bill. The order's own table is order.table.
+    """
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='linked_tables')
+    table = models.ForeignKey('floor.DiningTable', on_delete=models.PROTECT, related_name='+')
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = app_table('order_tables')
+        ordering = ['id']
+        constraints = [models.UniqueConstraint('order', 'table', name='order_tables_uniq')]
+
+
 class Kot(TenantModel):
     """One kitchen ticket: the lines sent to the kitchen together."""
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='kots')
+    # The merged table these lines were ordered from; empty = the order's own table
+    table = models.ForeignKey('floor.DiningTable', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
     number = models.IntegerField()  # per outlet and business day
     sent_at = models.DateTimeField(auto_now_add=True)
     sent_by = models.ForeignKey('accounts.User', on_delete=models.PROTECT, null=True, related_name='+')
@@ -119,6 +138,8 @@ class OrderItem(TenantModel, TimestampedModel):
     status = models.CharField(max_length=10, default='pending', choices=[(s, s) for s in STATUSES])
     discountable = models.BooleanField(default=True)
     kot = models.ForeignKey(Kot, on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
+    # The merged table this line was ordered from; empty = the order's own table
+    table = models.ForeignKey('floor.DiningTable', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
     discount_amount = models.DecimalField(default=0, **MONEY)  # this line's share of the bill discount
     tax_amount = models.DecimalField(default=0, **MONEY)
     total_price = models.DecimalField(default=0, **MONEY)       # unit price x quantity

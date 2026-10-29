@@ -60,6 +60,32 @@ export const compareTables = (a, b) =>
 
 export const getTableLabel = (table) => table?.table_number || table?.name || '';
 
+/**
+ * The number the service gives the next split of a table: 4 -> 4-1, then 4-2.
+ * Splitting a split table (4-1) continues from its table (4-2). Preview only; the service decides.
+ */
+export const nextSplitNumber = (table, tables) => {
+  const base = tables.find((t) => String(t.id) === String(table?.split_from)) || table;
+  const prefix = `${getTableLabel(base)}-`;
+  const taken = new Set(tables.map((t) => String(t.table_number || '').toLowerCase()));
+  let n = 1;
+  while (taken.has(`${prefix}${n}`.toLowerCase())) n += 1;
+  return `${prefix}${n}`;
+};
+
+/** Tables merged into this order's bill (besides its own table) */
+export const getLinkedTables = (order) => order?.linked_tables || [];
+
+export const isMergedOrder = (order) => getLinkedTables(order).length > 0;
+
+/** Every table the order is on: its own table first, then the merged ones */
+export const getOrderTableIds = (order) =>
+  [order?.table, ...getLinkedTables(order).map((t) => t.id)].filter((id) => id !== undefined && id !== null);
+
+/** "1 + 2 + 3" for a merged bill, else the order's table number */
+export const getOrderTablesLabel = (order) =>
+  [order?.table_number, ...getLinkedTables(order).map((t) => t.table_number)].filter(Boolean).join(' + ');
+
 /** Short order reference for compact UI, e.g. #042 */
 export const getShortOrderNumber = (order) => {
   const number = order?.order_number?.toString() || '';
@@ -68,8 +94,8 @@ export const getShortOrderNumber = (order) => {
 
 /**
  * Group active dine-in orders by table id.
- * Orders are matched by table id, falling back to table number.
- * Each table maps to its orders sorted oldest first.
+ * Orders are matched by table id, falling back to table number; a merged bill is listed
+ * under every table merged into it. Each table maps to its orders sorted oldest first.
  */
 export const groupOrdersByTable = (orders, tables) => {
   const byNumber = new Map((tables || []).map((t) => [String(t.table_number), t.id]));
@@ -78,8 +104,10 @@ export const groupOrdersByTable = (orders, tables) => {
   (orders || []).forEach((order) => {
     const tableId = order.table ?? byNumber.get(String(order.table_number));
     if (tableId === undefined || tableId === null) return;
-    if (!grouped[tableId]) grouped[tableId] = [];
-    grouped[tableId].push(order);
+    [tableId, ...getLinkedTables(order).map((t) => t.id)].forEach((id) => {
+      if (!grouped[id]) grouped[id] = [];
+      grouped[id].push(order);
+    });
   });
 
   Object.values(grouped).forEach((list) =>
@@ -99,9 +127,16 @@ const sharedKotNumber = (items) => {
   return numbers.size === 1 ? [...numbers][0] : null;
 };
 
+/** The table every line was ordered from, if they share one (merged bills) */
+const sharedTableNumber = (items) => {
+  const numbers = new Set(items.map((item) => item.table_number || null));
+  return numbers.size === 1 ? [...numbers][0] : null;
+};
+
 export const buildKOTData = (order, items = null, kotNumber = null) => {
   const lines = items || getBillableItems(order);
-  const tableLabel = order.table_number || (isTakeawayOrder(order) ? 'TAKEAWAY' : order.type?.replace('_', ' ').toUpperCase());
+  const tableLabel = sharedTableNumber(lines) || order.table_number
+    || (isTakeawayOrder(order) ? 'TAKEAWAY' : order.type?.replace('_', ' ').toUpperCase());
   return {
     orderNumber: order.order_number,
     order_number: order.order_number,
@@ -121,4 +156,20 @@ export const buildKOTData = (order, items = null, kotNumber = null) => {
       special_instructions: item.special_instructions || '',
     })),
   };
+};
+
+/**
+ * KOT print data, one ticket per table the lines were ordered from, so each table of a
+ * merged bill gets a KOT with its own name. Same arguments as buildKOTData.
+ */
+export const buildKOTTickets = (order, items = null, kotNumber = null) => {
+  const lines = items || getBillableItems(order);
+  const groups = new Map();
+  lines.forEach((item) => {
+    const key = item.table_number || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+  if (groups.size <= 1) return [buildKOTData(order, items, kotNumber)];
+  return [...groups.values()].map((group) => ({ ...buildKOTData(order, group), isAddition: !!items }));
 };

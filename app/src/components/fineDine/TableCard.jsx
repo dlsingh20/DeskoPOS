@@ -8,7 +8,7 @@ import {
   Tooltip,
   useColorModeValue,
 } from '@chakra-ui/react';
-import { Printer, Eye, ChefHat, Check, Wallet } from 'lucide-react';
+import { Printer, Eye, ChefHat, Check, Wallet, X } from 'lucide-react';
 import { isQrOrder, isQrSource } from '../../utils/tableQr';
 import {
   formatElapsed,
@@ -86,6 +86,7 @@ const TableCard = ({
   onSendToKitchen,
   onView,
   onSettle,
+  onRemove, // a free split table (4-1) nobody needs any more
 }) => {
   const order = orders[0];
   const state = getCardState(orders, tableStatus);
@@ -205,6 +206,24 @@ const TableCard = ({
               <Box position="absolute" top={2} right={2} color={selectedBorder}>
                 <Check size={16} />
               </Box>
+            )}
+            {onRemove && !selected && (
+              <Tooltip label={`Remove Table ${title}`} fontSize="xs" openDelay={300}>
+                <IconButton
+                  aria-label={`Remove Table ${title}`}
+                  icon={<X size={14} />}
+                  size="xs"
+                  variant="ghost"
+                  position="absolute"
+                  top={1.5}
+                  right={1.5}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove();
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </Tooltip>
             )}
           </Box>
         )}

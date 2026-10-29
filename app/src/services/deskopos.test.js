@@ -199,6 +199,66 @@ describe('Users & Roles', () => {
   });
 });
 
+describe('merged tables', () => {
+  const { buildKOTTickets, groupOrdersByTable, getOrderTablesLabel } = require('../utils/fineDineUtils');
+  const { buildBillModel } = require('../utils/printTemplates');
+  const BILL = {
+    id: 7, order_number: '261030001', table: 1, table_number: '1', type: 'dine_in', status: 'confirmed',
+    linked_tables: [{ id: 2, table_number: '2' }, { id: 3, table_number: '3' }],
+    items: [
+      { id: 1, menu_item_name: 'Paneer Tikka', quantity: 1, table_number: '1', kot_number: 1, unit_price: '250', total_price: '250' },
+      { id: 2, menu_item_name: 'Butter Naan', quantity: 2, table_number: '2', kot_number: 2, unit_price: '60', total_price: '120' },
+      { id: 3, menu_item_name: 'Lassi', quantity: 1, table_number: '2', kot_number: 2, unit_price: '80', total_price: '80' },
+    ],
+  };
+
+  it('lists a merged bill under every one of its tables', () => {
+    const grouped = groupOrdersByTable([BILL], [{ id: 1, table_number: '1' }, { id: 2 }, { id: 3 }]);
+    expect(Object.keys(grouped).sort()).toEqual(['1', '2', '3']);
+    expect(grouped[3][0].id).toBe(7);
+    expect(getOrderTablesLabel(BILL)).toBe('1 + 2 + 3');
+  });
+
+  it('prints one KOT per table, each with its own table name and KOT number', () => {
+    const tickets = buildKOTTickets(BILL);
+    expect(tickets.map((t) => [t.tableNumber, t.kotNumber, t.items.map((i) => i.menu_item_name)])).toEqual([
+      ['1', 1, ['Paneer Tikka']],
+      ['2', 2, ['Butter Naan', 'Lassi']],
+    ]);
+    expect(tickets.every((t) => t.isAddition === false)).toBe(true);
+    // New items for one merged table only: one KOT named after that table, not the bill's table
+    const added = buildKOTTickets(BILL, [{ menu_item_name: 'Raita', quantity: 1, table_number: '3', kot_number: 4 }]);
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({ tableNumber: '3', kotNumber: 4, isAddition: true });
+  });
+
+  it('puts every table on the one combined bill', () => {
+    const bill = buildBillModel(BILL, { settings: { header: {} } });
+    expect(bill.table).toBe('1 + 2 + 3');
+    expect(bill.lines.map((l) => l.name)).toEqual(['Paneer Tikka', 'Butter Naan', 'Lassi']);
+  });
+});
+
+describe('split tables', () => {
+  const { compareTables, nextSplitNumber } = require('../utils/fineDineUtils');
+  const TABLES = [
+    { id: 4, table_number: '4' },
+    { id: 10, table_number: '10' },
+    { id: 41, table_number: '4-1', split_from: 4 },
+    { id: 5, table_number: '5' },
+  ];
+
+  it('previews the next split number from the table it was split from', () => {
+    expect(nextSplitNumber(TABLES[1], TABLES)).toBe('10-1');
+    expect(nextSplitNumber(TABLES[0], TABLES)).toBe('4-2');
+    expect(nextSplitNumber(TABLES[2], TABLES)).toBe('4-2'); // splitting 4-1 continues from 4
+  });
+
+  it('shows a split table right after its table', () => {
+    expect([...TABLES].sort(compareTables).map((t) => t.table_number)).toEqual(['4', '4-1', '5', '10']);
+  });
+});
+
 describe('numbered KOTs', () => {
   const { buildKOTData } = require('../utils/fineDineUtils');
   const { buildKotModel, renderKotHtml } = require('../utils/printTemplates');

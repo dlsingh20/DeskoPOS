@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from outlets.models import TenantSettings
@@ -103,14 +104,29 @@ def recalculate(order, tenant):
     return order
 
 
+def open_order_of_table(table):
+    """The open order a table is on: its own, or the order it's merged into. None when free."""
+    return (Order.objects.filter(status__in=OPEN_STATUSES)
+            .filter(Q(table=table) | Q(linked_tables__table=table)).order_by('created_at', 'id').first())
+
+
 def sync_table(table):
-    """A table is occupied while it has an open order, and free once the last one closes."""
+    """A table is occupied while it has (or is merged into) an open order, and free once that closes."""
     if table is None:
         return
-    has_open = Order.objects.filter(table=table, status__in=OPEN_STATUSES).exists()
+    has_open = open_order_of_table(table) is not None
     if has_open and table.status != 'occupied':
         table.status = 'occupied'
         table.save(update_fields=['status', 'updated_at'])
     elif not has_open and table.status == 'occupied':
         table.status = 'available'
-        table.save(update_fields=['status', 'updated_at'])
+        if table.split_from_id:
+            table.is_active = False  # a split table (4-1) is done once its bill closes; history keeps it
+        table.save(update_fields=['status', 'is_active', 'updated_at'])
+
+
+def sync_order_tables(order):
+    """sync_table for the order's own table and every table merged into it."""
+    sync_table(order.table)
+    for link in order.linked_tables.select_related('table'):
+        sync_table(link.table)

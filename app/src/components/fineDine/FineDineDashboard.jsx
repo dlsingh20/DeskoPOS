@@ -13,17 +13,20 @@ import {
   Center,
   VStack,
   useColorModeValue,
+  useToast,
 } from '@chakra-ui/react';
 import { Plus, ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { usePOS } from '../../context/POSContext';
 import { useAccess } from '../../context/AccessContext';
 import orderService from '../../services/OrderService';
+import tableService from '../../services/TableService';
 import thirdPartyService from '../../services/ThirdPartyService';
 import OrderActionToolbar from './OrderActionToolbar';
 import TableCard from './TableCard';
 import OrderModal from './OrderModal';
 import MergeTableDialog from './MergeTableDialog';
+import SplitTableDialog from './SplitTableDialog';
 import MoveItemsDialog from './MoveItemsDialog';
 import AddTableDialog from './AddTableDialog';
 import useOrderActions from './useOrderActions';
@@ -31,9 +34,11 @@ import SettlePaymentModal from '../payment/SettlePaymentModal';
 import {
   compareTables,
   getOrderStartTime,
+  getOrderTablesLabel,
   getShortOrderNumber,
   getTableLabel,
   groupOrdersByTable,
+  isMergedOrder,
   isDineInOrder,
   isTakeawayOrder,
 } from '../../utils/fineDineUtils';
@@ -63,6 +68,7 @@ const FineDineDashboard = () => {
   const { can } = useAccess();
   const canSettle = can('bill.settle');
   const navigate = useNavigate();
+  const toast = useToast();
   const restaurant = state.selectedRestaurant;
 
   const bg = useColorModeValue('gray.50', 'gray.900');
@@ -79,6 +85,7 @@ const FineDineDashboard = () => {
   const [mergeMode, setMergeMode] = useState(false);
   const [mergeSelection, setMergeSelection] = useState([]);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [addTableOpen, setAddTableOpen] = useState(false);
   const [modal, setModal] = useState(null); // { table, orderType, orderId, mode }
@@ -119,7 +126,7 @@ const FineDineDashboard = () => {
   }, [refresh]);
 
   // Background refresh; skipped while a dialog is open so data doesn't shift under the user
-  const dialogOpen = !!modal || !!settleOrderId || mergeOpen || moveOpen || addTableOpen;
+  const dialogOpen = !!modal || !!settleOrderId || mergeOpen || splitOpen || moveOpen || addTableOpen;
   useEffect(() => {
     if (dialogOpen) return undefined;
     const interval = setInterval(() => {
@@ -179,6 +186,57 @@ const FineDineDashboard = () => {
     setMergeSelection([]);
   };
 
+  /** Put the selected tables on one bill held by the target table */
+  const mergeTables = async (target, selected) => {
+    try {
+      const bill = await orderService.mergeTables(target.id, selected.filter((t) => t.id !== target.id).map((t) => t.id));
+      toast({
+        title: `Tables ${getOrderTablesLabel(bill)} merged`,
+        description: `One bill on Table ${bill.table_number}. Each table keeps ordering and its KOTs print with its own name.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      setMergeOpen(false);
+      setMergeMode(false);
+      setMergeSelection([]);
+      refresh({ silent: true });
+    } catch (error) {
+      toast({ title: 'Could not merge the tables', description: error.message, status: 'error', duration: 7000, isClosable: true });
+    }
+  };
+
+  /** Split Table: add table 4-1 next to the chosen table and start its order right away */
+  const splitTable = async (table) => {
+    try {
+      const created = await tableService.splitTable(table.id);
+      toast({
+        title: `Table ${getTableLabel(created)} added`,
+        description: `It takes its own order and bill. Anything running on Table ${getTableLabel(table)} stays there.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      setSplitOpen(false);
+      refresh({ silent: true });
+      setModal({ table: created, orderType: 'dine_in', orderId: null, mode: 'edit' });
+    } catch (error) {
+      toast({ title: 'Could not split the table', description: error.message, status: 'error', duration: 7000, isClosable: true });
+    }
+  };
+
+  /** Remove a split table nobody ordered on */
+  const removeSplitTable = async (table) => {
+    try {
+      await tableService.removeSplitTable(table.id);
+      toast({ title: `Table ${getTableLabel(table)} removed`, status: 'success', duration: 3000 });
+    } catch (error) {
+      toast({ title: 'Could not remove the table', description: error.message, status: 'error', duration: 6000, isClosable: true });
+    } finally {
+      refresh({ silent: true });
+    }
+  };
+
   const closeModal = () => {
     setModal(null);
     refresh({ silent: true });
@@ -206,6 +264,7 @@ const FineDineDashboard = () => {
         mergeSelectionCount={mergeSelection.length}
         onToggleMerge={toggleMergeMode}
         onConfirmMerge={() => setMergeOpen(true)}
+        onSplit={() => setSplitOpen(true)}
         onMoveItems={() => setMoveOpen(true)}
         liveOrders={liveOrders}
         onLiveOrders={() => navigate('/third-party')}
@@ -247,6 +306,7 @@ const FineDineDashboard = () => {
                   <TableCard
                     key={table.id}
                     title={getTableLabel(table)}
+                    subtitle={tableOrders[0] && isMergedOrder(tableOrders[0]) ? `Merged ${getOrderTablesLabel(tableOrders[0])}` : null}
                     tableStatus={table.status}
                     orders={tableOrders}
                     now={now}
@@ -260,6 +320,7 @@ const FineDineDashboard = () => {
                     onSendToKitchen={(order) => sendToKitchen(order)}
                     onView={(order) => setModal({ table, orderType: 'dine_in', orderId: order.id, mode: 'view' })}
                     onSettle={canSettle ? (order) => setSettleOrderId(order.id) : undefined}
+                    onRemove={table.split_from && tableOrders.length === 0 && !mergeMode ? () => removeSplitTable(table) : undefined}
                   />
                 );
               })}
@@ -349,6 +410,15 @@ const FineDineDashboard = () => {
         selectedTables={tables.filter((t) => mergeSelection.includes(t.id))}
         ordersByTable={ordersByTable}
         formatPrice={formatPrice}
+        onMerge={mergeTables}
+      />
+
+      <SplitTableDialog
+        isOpen={splitOpen}
+        onClose={() => setSplitOpen(false)}
+        tables={tables}
+        ordersByTable={ordersByTable}
+        onSplit={splitTable}
       />
 
       <MoveItemsDialog

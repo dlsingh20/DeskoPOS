@@ -158,7 +158,8 @@ export const buildBillModel = (order, {
     printedAt: formatPrintDate(printedAt, timeZone, locale),
     currency,
     fmt: makeAmountFormatter(locale, decimals),
-    table: order.table_number || '',
+    // A merged bill names every table on it: 1 + 2 + 3
+    table: [order.table_number, ...(order.linked_tables || []).map((t) => t.table_number)].filter(Boolean).join(' + '),
     orderType: ORDER_TYPES[order.type] || '',
     serverName,
     customerName: order.customer_name || '',

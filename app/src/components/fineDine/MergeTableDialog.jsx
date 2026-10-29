@@ -18,17 +18,15 @@ import {
   AlertIcon,
   useColorModeValue,
 } from '@chakra-ui/react';
-import BackendRequiredNotice from './BackendRequiredNotice';
 import { getItemCount, getTableLabel } from '../../utils/fineDineUtils';
 
-// Flip to true once POST /orders/merge/ exists, and implement onMerge in the dashboard
-export const MERGE_SUPPORTED = false;
-
 /**
- * Review and confirm merging the selected tables into one target table.
+ * Review and confirm merging the selected tables onto one bill held by the target table.
+ * The tables keep taking orders and their KOTs keep their names (POST orders/merge/).
  */
 const MergeTableDialog = ({ isOpen, onClose, selectedTables, ordersByTable, formatPrice, onMerge }) => {
   const [targetId, setTargetId] = useState('');
+  const [merging, setMerging] = useState(false);
   const rowBg = useColorModeValue('gray.50', 'gray.700');
 
   const withOrders = selectedTables.filter((t) => ordersByTable[t.id]?.length);
@@ -42,12 +40,20 @@ const MergeTableDialog = ({ isOpen, onClose, selectedTables, ordersByTable, form
   if (selectedTables.length < 2) errors.push('Select at least two tables.');
   if (withOrders.length === 0) errors.push('None of the selected tables has an open order to merge.');
 
-  const totalItems = withOrders.reduce((sum, t) => sum + ordersByTable[t.id].reduce((s, o) => s + getItemCount(o), 0), 0);
-  const totalAmount = withOrders.reduce(
-    (sum, t) => sum + ordersByTable[t.id].reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0),
-    0
-  );
+  // Tables already merged share one order: count it once
+  const orders = [...new Map(withOrders.flatMap((t) => ordersByTable[t.id]).map((o) => [o.id, o])).values()];
+  const totalItems = orders.reduce((sum, o) => sum + getItemCount(o), 0);
+  const totalAmount = orders.reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
   const target = selectedTables.find((t) => String(t.id) === targetId);
+
+  const confirm = async () => {
+    setMerging(true);
+    try {
+      await onMerge?.(target, selectedTables);
+    } finally {
+      setMerging(false);
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
@@ -58,7 +64,7 @@ const MergeTableDialog = ({ isOpen, onClose, selectedTables, ordersByTable, form
         <ModalBody>
           <VStack align="stretch" spacing={4}>
             <Box>
-              <Text fontSize="sm" fontWeight="600" mb={2}>Keep the combined order on:</Text>
+              <Text fontSize="sm" fontWeight="600" mb={2}>Keep the bill on:</Text>
               <RadioGroup value={targetId} onChange={setTargetId}>
                 <VStack align="stretch" spacing={2}>
                   {selectedTables.map((table) => {
@@ -87,21 +93,20 @@ const MergeTableDialog = ({ isOpen, onClose, selectedTables, ordersByTable, form
               </Alert>
             ) : (
               <Text fontSize="sm">
-                All {totalItems} items ({formatPrice(totalAmount)}) will be combined on{' '}
-                <strong>Table {getTableLabel(target)}</strong>. Quantities, prices and kitchen notes are kept;
-                taxes are recalculated by the server.
+                All {totalItems} items ({formatPrice(totalAmount)}) go on one bill on{' '}
+                <strong>Table {getTableLabel(target)}</strong>. Every table keeps taking orders, and its KOTs print
+                with its own table name. You can unmerge a table before the bill is settled.
               </Text>
             )}
-
-            {!MERGE_SUPPORTED && <BackendRequiredNotice action="Merging tables" endpoint="POST /api/pos/api/orders/merge/" />}
           </VStack>
         </ModalBody>
         <ModalFooter gap={2}>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose} isDisabled={merging}>Cancel</Button>
           <Button
             colorScheme="purple"
-            isDisabled={!MERGE_SUPPORTED || errors.length > 0 || !target}
-            onClick={() => onMerge?.(target, selectedTables)}
+            isDisabled={errors.length > 0 || !target}
+            isLoading={merging}
+            onClick={confirm}
           >
             Merge into Table {getTableLabel(target)}
           </Button>
