@@ -77,6 +77,11 @@ class ResetAdminPasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(min_length=8, write_only=True)
 
 
+class ChangeOwnPasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField()
+    new_password = serializers.CharField(min_length=12, write_only=True)
+
+
 class StatusHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TenantStatusHistory

@@ -49,18 +49,17 @@ const signedIn = () => session.save('token', { id: 1, email: 'owner@appdesko.com
 beforeEach(() => session.clear());
 
 describe('sign-in', () => {
-  it('shows one message for any wrong credential and clears the code', async () => {
-    routes({ 'POST /api/platform/auth/login/': () => json(401, { code: 'invalid_credentials', detail: 'x' }) });
+  it('asks only for email and password, with one message for a wrong one', async () => {
+    const calls = routes({ 'POST /api/platform/auth/login/': () => json(401, { code: 'invalid_credentials', detail: 'x' }) });
     renderApp();
+    expect(screen.queryByLabelText(/authenticator code/i)).not.toBeInTheDocument();
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), 'owner@appdesko.com');
     await user.type(screen.getByLabelText(/^password/i), 'wrong');
-    const code = screen.getByLabelText(/authenticator code/i);
-    await user.type(code, '12a3456');
-    expect(code).toHaveValue('123456');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
-    expect(await screen.findByText('Wrong email, password or authenticator code.')).toBeInTheDocument();
-    expect(code).toHaveValue('');
+    expect(await screen.findByText('Wrong email or password.')).toBeInTheDocument();
+    expect(calls.find((c) => c.key === 'POST /api/platform/auth/login/').body)
+      .toMatchObject({ email: 'owner@appdesko.com', password: 'wrong' });
   });
 
   it('opens the client list after signing in', async () => {
@@ -71,7 +70,6 @@ describe('sign-in', () => {
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), 'o@a.com');
     await user.type(screen.getByLabelText(/^password/i), 'pw');
-    await user.type(screen.getByLabelText(/authenticator code/i), '123456');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
     expect(await screen.findByText('No clients yet. Create the first one.')).toBeInTheDocument();
     expect(session.token()).toBe('tok');
@@ -160,4 +158,24 @@ it('sends signed-out users back to sign-in when the token expires', async () => 
   routes({ 'GET /api/platform/tenants/': () => json(401, { code: 'not_authenticated', detail: 'x' }) });
   renderApp('/clients');
   expect(await screen.findByText('Your session ended. Please sign in again.')).toBeInTheDocument();
+});
+
+describe('change password', () => {
+  it('sends the current and new password from the header', async () => {
+    signedIn();
+    const calls = routes({ 'POST /api/platform/auth/change-password/': () => json(200, { ok: true }) });
+    renderApp('/clients');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /change password/i }));
+    await user.type(screen.getByLabelText(/current password/i), 'old-password-123');
+    await user.type(screen.getByLabelText(/^new password/i), 'brand-new-pass-456');
+    await user.type(screen.getByLabelText(/confirm new password/i), 'brand-new-pass-45');
+    const submit = screen.getAllByRole('button', { name: /change password/i }).at(-1);
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText(/confirm new password/i), '6');
+    await user.click(submit);
+    expect(await screen.findByText(/your password has been changed/i)).toBeInTheDocument();
+    expect(calls.find((c) => c.key === 'POST /api/platform/auth/change-password/').body)
+      .toEqual({ current_password: 'old-password-123', new_password: 'brand-new-pass-456' });
+  });
 });

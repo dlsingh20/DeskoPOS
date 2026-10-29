@@ -4,9 +4,10 @@ import {
 } from '@chakra-ui/react';
 import { useAuth } from '../auth';
 
-// Development on this computer only: the service skips the code too (DEBUG + local request)
-export const SKIP_TOTP = import.meta.env.MODE === 'development'
-  && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+// Authenticator code is off for now (email + password only). Set VITE_REQUIRE_TOTP=true together with the
+// service's PLATFORM_REQUIRE_TOTP to ask for it again. Development on this computer never asks.
+export const ASK_TOTP = import.meta.env.VITE_REQUIRE_TOTP === 'true'
+  && !(import.meta.env.MODE === 'development' && ['localhost', '127.0.0.1'].includes(window.location.hostname));
 
 export default function LoginPage() {
   const { login, expired } = useAuth();
@@ -23,7 +24,7 @@ export default function LoginPage() {
     try {
       await login(email.trim(), password, totp.trim());
     } catch (err) {
-      setError(err.status === 401 ? `Wrong email, password${SKIP_TOTP ? '' : ' or authenticator code'}.` : err.message);
+      setError(err.status === 401 ? (ASK_TOTP ? 'Wrong email, password or authenticator code.' : 'Wrong email or password.') : err.message);
       setTotp('');
     } finally {
       setBusy(false);
@@ -51,7 +52,7 @@ export default function LoginPage() {
             <Input type="password" autoComplete="current-password" value={password}
               onChange={(e) => setPassword(e.target.value)} />
           </FormControl>
-          {!SKIP_TOTP && (
+          {ASK_TOTP && (
             <FormControl isRequired>
               <FormLabel>Authenticator code</FormLabel>
               <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={totp}
@@ -59,7 +60,7 @@ export default function LoginPage() {
               <FormHelperText>6 digits from your authenticator app</FormHelperText>
             </FormControl>
           )}
-          <Button type="submit" isLoading={busy} isDisabled={!SKIP_TOTP && totp.length !== 6}>Sign in</Button>
+          <Button type="submit" isLoading={busy} isDisabled={ASK_TOTP && totp.length !== 6}>Sign in</Button>
         </Stack>
       </Box>
     </Center>

@@ -3,7 +3,7 @@ import pyotp
 from django.db import connection
 
 from accounts.models import Role, User
-from console.models import PlatformUser
+from console.models import PlatformAuditLog, PlatformUser
 from core import tenancy
 from outlets.models import CashCounter, Outlet, PrintSettings
 from payments.models import PaymentMethod
@@ -144,3 +144,46 @@ def test_local_development_can_skip_the_authenticator_code(owner, settings):
     assert remote.status_code == 401
     wrong = APIClient().post('/api/platform/auth/login/', {**body, 'password': 'nope'}, format='json')
     assert wrong.status_code == 401
+
+
+def test_super_admin_changes_own_password(owner, platform_api):
+    url = '/api/platform/auth/change-password/'
+    r = platform_api.post(url, {'current_password': 'wrong-password-123', 'new_password': 'brand-new-pass-456'}, format='json')
+    assert r.status_code == 400 and r.data['code'] == 'invalid_password'
+    r = platform_api.post(url, {'current_password': 'owner-password-123', 'new_password': 'short'}, format='json')
+    assert r.status_code == 400
+    r = platform_api.post(url, {'current_password': 'owner-password-123', 'new_password': 'owner-password-123'}, format='json')
+    assert r.status_code == 400 and r.data['code'] == 'same_password'
+
+    r = platform_api.post(url, {'current_password': 'owner-password-123', 'new_password': 'brand-new-pass-456'}, format='json')
+    assert r.status_code == 200
+    platform_api_for(owner, password='brand-new-pass-456')
+    with tenancy.platform_scope():
+        assert PlatformAuditLog.objects.filter(platform_user=owner, action='platform.change_password').exists()
+
+
+def test_read_only_staff_can_change_own_password(db):
+    with tenancy.platform_scope():
+        viewer = PlatformUser(email='viewer@appdesko.com', full_name='Viewer', role='read_only', mfa_secret=pyotp.random_base32())
+        viewer.set_password('viewer-password-1')
+        viewer.save()
+    api = platform_api_for(viewer, password='viewer-password-1')
+    r = api.post('/api/platform/auth/change-password/',
+                 {'current_password': 'viewer-password-1', 'new_password': 'viewer-password-2'}, format='json')
+    assert r.status_code == 200
+
+
+def test_client_token_cannot_change_a_super_admin_password(client_admin):
+    _, api, _ = client_admin
+    r = api.post('/api/platform/auth/change-password/',
+                 {'current_password': 'x', 'new_password': 'whatever-pass-123'}, format='json')
+    assert r.status_code in (401, 403)
+
+
+def test_platform_login_without_authenticator_code_when_switched_off(owner, settings):
+    from rest_framework.test import APIClient
+    settings.PLATFORM_REQUIRE_TOTP = False
+    r = APIClient().post('/api/platform/auth/login/', {'email': owner.email, 'password': 'owner-password-123'}, format='json')
+    assert r.status_code == 200 and r.data['access']
+    r = APIClient().post('/api/platform/auth/login/', {'email': owner.email, 'password': 'wrong-password'}, format='json')
+    assert r.status_code == 401

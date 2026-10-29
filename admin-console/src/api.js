@@ -77,6 +77,9 @@ export async function api(path, { method = 'GET', body, query } = {}) {
 
 export const platform = {
   login: (email, password, totp) => api('/api/platform/auth/login/', { method: 'POST', body: { email, password, totp } }),
+  changePassword: (currentPassword, newPassword) => api('/api/platform/auth/change-password/', {
+    method: 'POST', body: { current_password: currentPassword, new_password: newPassword },
+  }),
   tenants: (query) => api('/api/platform/tenants/', { query }),
   tenant: (id) => api(`/api/platform/tenants/${id}/`),
   createTenant: (body) => api('/api/platform/tenants/', { method: 'POST', body }),

@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path('auth/login/', views.platform_login),
+    path('auth/change-password/', views.ChangeOwnPassword.as_view()),
     path('tenants/', views.TenantListCreate.as_view()),
     path('tenants/<int:pk>/', views.TenantDetail.as_view()),
     path('tenants/<int:pk>/activate/', views.TenantStatusAction.as_view(target='active')),

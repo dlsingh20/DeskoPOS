@@ -10,6 +10,13 @@ from core import tenancy
 OWNER_PASSWORD = 'owner-password-123'
 
 
+@pytest.fixture(autouse=True)
+def second_factors_on(settings):
+    """Production has both codes off for now; the tests keep checking them. Tests that need them off say so."""
+    settings.SIGNIN_EMAIL_CODE = True
+    settings.PLATFORM_REQUIRE_TOTP = True
+
+
 @pytest.fixture
 def owner(db):
     with tenancy.platform_scope():

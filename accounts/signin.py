@@ -56,7 +56,7 @@ def _mask_email(email):
 
 
 def _needs_otp(user):
-    if user.role.key not in settings.OTP_ROLES:
+    if not settings.SIGNIN_EMAIL_CODE or user.role.key not in settings.OTP_ROLES:
         return False
     tenant_settings = TenantSettings.objects.filter(tenant_id=user.tenant_id).first()
     return tenant_settings is None or tenant_settings.require_otp_for_admins
