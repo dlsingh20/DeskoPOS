@@ -13,7 +13,6 @@ import { usePOS } from '../../context/POSContext';
 
 // Import components
 import MinimalPOSHeader from './MinimalPOSHeader';
-import MenuView from '../menu/MenuView';
 import UnifiedOrderView from '../orders/UnifiedOrderView';
 import ArchiveView from '../archive/ArchiveView';
 // import ReportsView from '../reports/ReportsView';
@@ -145,7 +144,8 @@ const POSApp = ({ onLogout }) => {
             {/* Fine Dine dashboard is the default/home route */}
             <Route path="/" element={<FineDineDashboard />} />
             <Route path="/fine-dine" element={<FineDineDashboard />} />
-            <Route path="/menu" element={<MenuView />} />
+            {/* The old Menu ordering screen: orders are taken on Fine Dine now */}
+            <Route path="/menu" element={<Navigate to="/fine-dine" replace />} />
 
             {/* Third-party (Zomato / Swiggy) live orders */}
             <Route path="/third-party" element={<LiveOrdersView />} />
