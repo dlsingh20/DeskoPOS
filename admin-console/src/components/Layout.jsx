@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Badge, Box, Button, Container, Flex, HStack, Text } from '@chakra-ui/react';
 import { NavLink } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
 import { useAuth } from '../auth';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const NavItem = ({ to, children }) => (
   <Box
@@ -22,6 +23,7 @@ const NavItem = ({ to, children }) => (
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const [changingPassword, setChangingPassword] = useState(false);
   return (
     <Box minH="100vh">
       <Box bg="white" borderBottomWidth="1px">
@@ -35,6 +37,10 @@ export default function Layout({ children }) {
             <HStack spacing={3}>
               <Text fontSize="sm" color="gray.600">{user.name || user.email}</Text>
               <Badge>{user.role}</Badge>
+              <Button size="sm" variant="ghost" colorScheme="gray" leftIcon={<KeyRound size={16} />}
+                onClick={() => setChangingPassword(true)}>
+                Change password
+              </Button>
               <Button size="sm" variant="ghost" colorScheme="gray" leftIcon={<LogOut size={16} />} onClick={logout}>
                 Sign out
               </Button>
@@ -43,6 +49,7 @@ export default function Layout({ children }) {
         </Container>
       </Box>
       <Container maxW="6xl" py={6}>{children}</Container>
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </Box>
   );
 }

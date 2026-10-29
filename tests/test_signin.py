@@ -53,6 +53,15 @@ def test_admin_gets_an_emailed_code_and_the_device_is_trusted(make_client, mailo
     assert len(mailoutbox) == mails  # no new code
 
 
+def test_admin_signs_in_with_id_and_password_when_the_code_is_off(make_client, mailoutbox, settings):
+    settings.SIGNIN_EMAIL_CODE = False
+    make_client()
+    mails = len(mailoutbox)
+    r = post_token(username='sg_admin', password='Admin-pass-1')
+    assert r.status_code == 200 and r.data['access']
+    assert len(mailoutbox) == mails  # no code emailed
+
+
 def test_cashier_signs_in_without_a_code(client_admin):
     tenant, _, _ = client_admin
     add_user(tenant['id'], 'sg_cash1', 'cashier')

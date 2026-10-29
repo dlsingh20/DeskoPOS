@@ -16,7 +16,7 @@ from core.permissions import IsPlatformUser, PlatformRole
 from . import provisioning
 from .models import Country, Plan, PlatformAuditLog, PlatformUser, Tenant
 from .serializers import (
-    LOGIN_ID_RE, CountrySerializer, PlanSerializer, PlatformAuditSerializer, ResetAdminPasswordSerializer,
+    LOGIN_ID_RE, ChangeOwnPasswordSerializer, CountrySerializer, PlanSerializer, PlatformAuditSerializer, ResetAdminPasswordSerializer,
     StatusChangeSerializer, StatusHistorySerializer, TenantCreateSerializer, TenantSerializer,
 )
 
@@ -37,11 +37,12 @@ class PlatformView:
 @authentication_classes([])
 @permission_classes([AllowAny])
 def platform_login(request):
-    """Email + password + authenticator code. Same error for every failure."""
+    """Email + password (+ authenticator code when PLATFORM_REQUIRE_TOTP). Same error for every failure."""
     tenancy.act_as_platform()
     email = str(request.data.get('email', '')).strip()
     user = PlatformUser.objects.filter(email__iexact=email, is_active=True).first()
-    skip_totp = settings.PLATFORM_SKIP_TOTP_LOCAL and client_ip(request) in LOCAL_ADDRESSES
+    skip_totp = (not settings.PLATFORM_REQUIRE_TOTP
+                 or (settings.PLATFORM_SKIP_TOTP_LOCAL and client_ip(request) in LOCAL_ADDRESSES))
     ok = (user is not None and user.check_password(str(request.data.get('password', '')))
           and (skip_totp or pyotp.TOTP(user.mfa_secret).verify(str(request.data.get('totp', '')), valid_window=1)))
     if not ok:
@@ -51,6 +52,25 @@ def platform_login(request):
     PlatformAuditLog.objects.create(platform_user=user, action='platform.login', ip_address=client_ip(request))
     access = tokens.issue({'sub': user.id, 'role': user.role}, tokens.PLATFORM_AUDIENCE, settings.PLATFORM_TOKEN_LIFETIME)
     return Response({'access': access, 'user': {'id': user.id, 'email': user.email, 'name': user.full_name, 'role': user.role}})
+
+
+class ChangeOwnPassword(APIView):
+    """The signed-in Super Admin changes their own password. Any role may."""
+    authentication_classes = [PlatformTokenAuthentication]
+    permission_classes = [IsPlatformUser]
+
+    def post(self, request):
+        body = ChangeOwnPasswordSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        user = request.user
+        if not user.check_password(body.validated_data['current_password']):
+            raise ApiError('The current password is wrong.', code='invalid_password')
+        if body.validated_data['current_password'] == body.validated_data['new_password']:
+            raise ApiError('Choose a password different from the current one.', code='same_password')
+        user.set_password(body.validated_data['new_password'])
+        user.save(update_fields=['password_hash'])
+        PlatformAuditLog.objects.create(platform_user=user, action='platform.change_password', ip_address=client_ip(request))
+        return Response({'ok': True})
 
 
 class TenantListCreate(PlatformView, generics.ListAPIView):

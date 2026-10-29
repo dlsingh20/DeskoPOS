@@ -60,7 +60,7 @@ npm run dev        # http://localhost:3100, talks to the service on http://local
 npm test
 ```
 
-Set `VITE_API_BASE_URL` when the service runs elsewhere. Sign in with the email, password and authenticator code from `create_platform_user`. Owners and admins can change clients; support staff can only look.
+Set `VITE_API_BASE_URL` when the service runs elsewhere. Sign in with the email and password from `create_platform_user`. The authenticator code is off for now; set `PLATFORM_REQUIRE_TOTP=true` on the service and `VITE_REQUIRE_TOTP=true` on the console to ask for it again. Likewise `SIGNIN_EMAIL_CODE=true` turns the emailed sign-in code back on for client Administrators and Managers. Owners and admins can change clients; support staff can only look.
 
 ## Layout
 

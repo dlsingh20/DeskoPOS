@@ -23,6 +23,8 @@ def env_bool(name, default=False):
 
 
 DEBUG = env_bool('DEBUG', False)
+# Super Admin authenticator (TOTP) code at sign-in. Off for now: email + password only
+PLATFORM_REQUIRE_TOTP = env_bool('PLATFORM_REQUIRE_TOTP', False)
 # Development only: Super Admin sign-in from this computer skips the authenticator code
 PLATFORM_SKIP_TOTP_LOCAL = DEBUG and env_bool('PLATFORM_SKIP_TOTP_LOCAL', True)
 SECRET_KEY = env('SECRET_KEY') or ('dev-only-insecure-key-never-use-in-production' if DEBUG or env('PYTEST_VERSION') else None)
@@ -89,6 +91,8 @@ OTP_MAX_ATTEMPTS = 5
 LOGIN_MAX_FAILURES = int(env('LOGIN_MAX_FAILURES', '5'))
 LOGIN_LOCK_MINUTES = int(env('LOGIN_LOCK_MINUTES', '15'))
 APPROVAL_LIFETIME = timedelta(minutes=5)
+# Emailed sign-in code for client Administrators/Managers. Off for now: ID + password only
+SIGNIN_EMAIL_CODE = env_bool('SIGNIN_EMAIL_CODE', False)
 # Roles that get the emailed sign-in code (when the client setting is on)
 OTP_ROLES = ('administrator', 'manager')
 
