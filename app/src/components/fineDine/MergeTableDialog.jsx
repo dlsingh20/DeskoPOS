@@ -18,6 +18,7 @@ import {
   AlertIcon,
   useColorModeValue,
 } from '@chakra-ui/react';
+import { DIALOG_CONTENT, useDialogSize } from './responsive';
 import { getItemCount, getTableLabel } from '../../utils/fineDineUtils';
 
 /**
@@ -28,6 +29,7 @@ const MergeTableDialog = ({ isOpen, onClose, selectedTables, ordersByTable, form
   const [targetId, setTargetId] = useState('');
   const [merging, setMerging] = useState(false);
   const rowBg = useColorModeValue('gray.50', 'gray.700');
+  const size = useDialogSize('lg');
 
   const withOrders = selectedTables.filter((t) => ordersByTable[t.id]?.length);
 
@@ -56,9 +58,9 @@ const MergeTableDialog = ({ isOpen, onClose, selectedTables, ordersByTable, form
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
+    <Modal isOpen={isOpen} onClose={onClose} size={size} isCentered scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent borderRadius="16px">
+      <ModalContent {...DIALOG_CONTENT}>
         <ModalHeader>Merge tables</ModalHeader>
         <ModalCloseButton />
         <ModalBody>

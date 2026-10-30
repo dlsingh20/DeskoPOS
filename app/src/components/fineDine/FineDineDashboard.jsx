@@ -5,7 +5,7 @@ import {
   HStack,
   Text,
   Badge,
-  SimpleGrid,
+  Grid,
   Skeleton,
   Alert,
   AlertIcon,
@@ -30,6 +30,7 @@ import SplitTableDialog from './SplitTableDialog';
 import MoveItemsDialog from './MoveItemsDialog';
 import AddTableDialog from './AddTableDialog';
 import useOrderActions from './useOrderActions';
+import { TOUCH_TARGETS } from './responsive';
 import SettlePaymentModal from '../payment/SettlePaymentModal';
 import {
   compareTables,
@@ -45,7 +46,17 @@ import {
 
 const REFRESH_INTERVAL_MS = 15000;
 const CLOCK_INTERVAL_MS = 30000;
-const GRID_MIN_CARD_WIDTH = '128px';
+// Cards keep their size and the number of columns follows the screen width (auto-fill, so a
+// few tables on a wide monitor don't stretch across the whole row). Bigger cards on big screens.
+const CARD_GRID = {
+  templateColumns: {
+    base: 'repeat(auto-fill, minmax(112px, 1fr))',
+    md: 'repeat(auto-fill, minmax(128px, 1fr))',
+    '2xl': 'repeat(auto-fill, minmax(148px, 1fr))',
+  },
+  columnGap: { base: 3, md: 4 },
+  rowGap: 3,
+};
 
 const SectionHeader = ({ title, count, accent }) => {
   const badgeBg = useColorModeValue('gray.100', 'gray.700');
@@ -258,7 +269,7 @@ const FineDineDashboard = () => {
   const initialLoading = loadingOrders && !lastUpdated;
 
   return (
-    <Flex direction="column" h="full" bg={bg}>
+    <Flex direction="column" h="full" bg={bg} sx={TOUCH_TARGETS}>
       <OrderActionToolbar
         mergeMode={mergeMode}
         mergeSelectionCount={mergeSelection.length}
@@ -274,7 +285,7 @@ const FineDineDashboard = () => {
         lastUpdated={lastUpdated}
       />
 
-      <Box flex={1} overflowY="auto" px={{ base: 3, md: 6 }} py={5}>
+      <Box flex={1} overflowY="auto" px={{ base: 3, md: 6 }} py={{ base: 3, md: 5 }}>
         {loadError && (
           <Alert status="error" borderRadius="12px" mb={4}>
             <AlertIcon />
@@ -290,16 +301,16 @@ const FineDineDashboard = () => {
         <Box as="section" aria-label="Dine in tables" mb={8}>
           <SectionHeader title="DINE IN" count={dineInOrders.length} accent="blue.500" />
           {initialLoading && tables.length === 0 ? (
-            <SimpleGrid minChildWidth={GRID_MIN_CARD_WIDTH} spacing={4}>
+            <Grid {...CARD_GRID}>
               {Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} h="112px" borderRadius="14px" />)}
-            </SimpleGrid>
+            </Grid>
           ) : tables.length === 0 ? (
             <VStack py={10} spacing={3}>
               <Text color="gray.500">This restaurant has no tables yet.</Text>
               <Button size="sm" leftIcon={<Plus size={16} />} onClick={() => setAddTableOpen(true)}>Add table</Button>
             </VStack>
           ) : (
-            <SimpleGrid minChildWidth={GRID_MIN_CARD_WIDTH} spacingX={4} spacingY={3}>
+            <Grid {...CARD_GRID}>
               {tables.map((table) => {
                 const tableOrders = ordersByTable[table.id] || [];
                 return (
@@ -324,14 +335,14 @@ const FineDineDashboard = () => {
                   />
                 );
               })}
-            </SimpleGrid>
+            </Grid>
           )}
         </Box>
 
         {/* TAKE AWAY */}
         <Box as="section" aria-label="Take away orders" opacity={mergeMode ? 0.4 : 1} pointerEvents={mergeMode ? 'none' : 'auto'}>
           <SectionHeader title="TAKE AWAY" count={takeawayOrders.length} accent="orange.400" />
-          <SimpleGrid minChildWidth={GRID_MIN_CARD_WIDTH} spacingX={4} spacingY={3}>
+          <Grid {...CARD_GRID}>
             <Box
               as="button"
               h="112px"
@@ -368,7 +379,7 @@ const FineDineDashboard = () => {
                 onSettle={canSettle ? (o) => setSettleOrderId(o.id) : undefined}
               />
             ))}
-          </SimpleGrid>
+          </Grid>
           {!initialLoading && takeawayOrders.length === 0 && (
             <HStack spacing={2} color="gray.500" mt={3} fontSize="sm">
               <ShoppingBag size={14} />

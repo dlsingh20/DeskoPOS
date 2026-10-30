@@ -17,12 +17,14 @@ import {
   VStack,
   useToast,
 } from '@chakra-ui/react';
+import { DIALOG_CONTENT, useDialogSize } from './responsive';
 import tableService from '../../services/TableService';
 
 /**
  * Create a table for the selected restaurant.
  */
 const AddTableDialog = ({ isOpen, onClose, restaurant, existingTables, onCreated }) => {
+  const size = useDialogSize('sm');
   const toast = useToast();
   const [tableNumber, setTableNumber] = useState('');
   const [name, setName] = useState('');
@@ -68,9 +70,9 @@ const AddTableDialog = ({ isOpen, onClose, restaurant, existingTables, onCreated
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="sm" isCentered>
+    <Modal isOpen={isOpen} onClose={onClose} size={size} isCentered scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent as="form" onSubmit={handleSubmit} borderRadius="16px">
+      <ModalContent as="form" onSubmit={handleSubmit} {...DIALOG_CONTENT}>
         <ModalHeader>Add table</ModalHeader>
         <ModalCloseButton />
         <ModalBody>

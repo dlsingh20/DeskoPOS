@@ -20,6 +20,7 @@ import {
   VStack,
   useToast,
 } from '@chakra-ui/react';
+import { DIALOG_CONTENT, useDialogSize } from './responsive';
 import orderService from '../../services/OrderService';
 import settlementService from '../../services/SettlementService';
 import { useAccess } from '../../context/AccessContext';
@@ -42,6 +43,7 @@ export const CANCEL_REASONS = [
  * - The table is freed when no other order is open on it.
  */
 const CancelOrderDialog = ({ isOpen, onClose, order, formatPrice, onCancelled }) => {
+  const size = useDialogSize('md');
   const toast = useToast();
   const { userName, requestApproval } = useAccess();
   const [reasonChoice, setReasonChoice] = useState('');
@@ -106,9 +108,9 @@ const CancelOrderDialog = ({ isOpen, onClose, order, formatPrice, onCancelled })
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={busy ? () => {} : onClose} size="md" isCentered>
+    <Modal isOpen={isOpen} onClose={busy ? () => {} : onClose} size={size} isCentered scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent borderRadius="16px" mx={4}>
+      <ModalContent {...DIALOG_CONTENT}>
         <ModalHeader>Cancel order {getShortOrderNumber(order)}</ModalHeader>
         <ModalCloseButton isDisabled={busy} />
         <ModalBody>

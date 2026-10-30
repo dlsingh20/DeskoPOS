@@ -16,6 +16,7 @@ import {
   Box,
   useColorModeValue,
 } from '@chakra-ui/react';
+import { DIALOG_CONTENT, useDialogSize } from './responsive';
 import { getTableLabel, nextSplitNumber } from '../../utils/fineDineUtils';
 
 /**
@@ -26,6 +27,7 @@ const SplitTableDialog = ({ isOpen, onClose, tables, ordersByTable, onSplit }) =
   const [tableId, setTableId] = useState('');
   const [splitting, setSplitting] = useState(false);
   const rowBg = useColorModeValue('gray.50', 'gray.700');
+  const size = useDialogSize('lg');
   const mutedColor = useColorModeValue('gray.500', 'gray.400');
 
   const choices = tables.filter((t) => t.status !== 'out_of_order');
@@ -47,9 +49,9 @@ const SplitTableDialog = ({ isOpen, onClose, tables, ordersByTable, onSplit }) =
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered scrollBehavior="inside">
+    <Modal isOpen={isOpen} onClose={onClose} size={size} isCentered scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent borderRadius="16px">
+      <ModalContent {...DIALOG_CONTENT}>
         <ModalHeader>Split table</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
