@@ -12,6 +12,9 @@ import {
 } from '@chakra-ui/react';
 import { Merge, ArrowLeftRight, Radio, Plus, RefreshCw, SquareSplitHorizontal, X } from 'lucide-react';
 
+/** Part of a button label that phones leave out ("Merge Table" -> "Merge") */
+const Short = ({ children }) => <Box as="span" display={{ base: 'none', sm: 'inline' }}>{children}</Box>;
+
 /**
  * Action bar under the top navigation: Merge Table, Split Table, Move Items, Live Orders,
  * plus Add Table and refresh on the right.
@@ -65,7 +68,7 @@ const OrderActionToolbar = ({
             onClick={onToggleMerge}
             aria-pressed={mergeMode}
           >
-            {mergeMode ? 'Cancel merge' : 'Merge Table'}
+            {mergeMode ? 'Cancel merge' : <>Merge<Short> Table</Short></>}
           </Button>
           <Button
             size="sm"
@@ -79,7 +82,7 @@ const OrderActionToolbar = ({
             onClick={onSplit}
             isDisabled={mergeMode}
           >
-            Split Table
+            Split<Short> Table</Short>
           </Button>
           <Button
             size="sm"
@@ -92,7 +95,7 @@ const OrderActionToolbar = ({
             onClick={onMoveItems}
             isDisabled={mergeMode}
           >
-            Move Items
+            Move<Short> Items</Short>
           </Button>
           <Tooltip
             label={liveConfigured ? 'Incoming third-party orders' : 'No Zomato / Swiggy integration is set up yet'}
@@ -116,7 +119,7 @@ const OrderActionToolbar = ({
                 )
               }
             >
-              Live Orders
+              Live<Short> Orders</Short>
             </Button>
           </Tooltip>
         </HStack>
@@ -139,7 +142,7 @@ const OrderActionToolbar = ({
           </Tooltip>
           {onAddTable && (
             <Button size="sm" leftIcon={<Plus size={16} />} variant="outline" onClick={onAddTable} isDisabled={mergeMode}>
-              Add Table
+              Add<Short> Table</Short>
             </Button>
           )}
         </HStack>

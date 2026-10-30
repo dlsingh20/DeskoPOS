@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogBody,
   AlertDialogFooter,
+  IconButton,
   Menu,
   MenuButton,
   MenuList,
@@ -30,7 +31,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { Printer, ChefHat, Pencil, Plus, Receipt, Split, Wallet } from 'lucide-react';
+import { Printer, ChefHat, EllipsisVertical, Pencil, Plus, Receipt, Split, Wallet, XCircle } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
 import { useAccess } from '../../context/AccessContext';
 import orderService from '../../services/OrderService';
@@ -40,6 +41,7 @@ import CurrentOrderSummary from './CurrentOrderSummary';
 import useOrderActions from './useOrderActions';
 import SettlePaymentModal from '../payment/SettlePaymentModal';
 import CancelOrderDialog from './CancelOrderDialog';
+import { TOUCH_TARGETS } from './responsive';
 import {
   isActiveOrder,
   isEditableOrder,
@@ -84,6 +86,8 @@ const OrderModal = ({
   const { can, requestApproval } = useAccess();
   const toast = useToast();
   const modalSize = useBreakpointValue({ base: 'full', lg: '6xl' });
+  // Phones: the footer keeps the main action buttons and puts the rest in a "more" menu
+  const compactFooter = useBreakpointValue({ base: true, md: false }, { fallback: 'md' });
   const panelBg = useColorModeValue('gray.50', 'gray.900');
   const mutedColor = useColorModeValue('gray.500', 'gray.400');
   const inputBg = useColorModeValue('white', 'gray.800');
@@ -438,10 +442,10 @@ const OrderModal = ({
         closeOnOverlayClick={draft.length === 0}
       >
         <ModalOverlay bg="blackAlpha.400" backdropFilter="blur(2px)" />
-        <ModalContent borderRadius={{ base: 0, lg: '16px' }} maxH={{ base: '100vh', lg: '88vh' }} overflow="hidden">
+        <ModalContent borderRadius={{ base: 0, lg: '16px' }} maxH={{ base: '100vh', lg: '88vh' }} overflow="hidden" sx={TOUCH_TARGETS}>
           <ModalHeader py={3} pr={14} borderBottomWidth="1px">
-            <Flex align="center" gap={3} wrap="wrap">
-              <Text fontSize="xl" fontWeight="700">{title}</Text>
+            <Flex align="center" gap={{ base: 2, md: 3 }} wrap="wrap">
+              <Text fontSize={{ base: 'lg', md: 'xl' }} fontWeight="700">{title}</Text>
               {order && (
                 <>
                   <Badge colorScheme={STATUS_COLORS[order.status] || 'gray'} fontSize="xs" px={2} py={0.5} borderRadius="md">
@@ -473,7 +477,7 @@ const OrderModal = ({
             ) : (
               <Flex flex={1} direction={{ base: 'column', lg: 'row' }} minH={0} h={{ lg: '70vh' }}>
                 {editable && (
-                  <Box flex={{ base: 'none', lg: '1.2' }} h={{ base: '45vh', lg: 'auto' }} p={4} borderRightWidth={{ lg: '1px' }} borderBottomWidth={{ base: '1px', lg: 0 }} minH={0}>
+                  <Box flex={{ base: 'none', lg: '1.2' }} h={{ base: '45vh', lg: 'auto' }} p={{ base: 3, md: 4 }} borderRightWidth={{ lg: '1px' }} borderBottomWidth={{ base: '1px', lg: 0 }} minH={0}>
                     <MenuItemSearch
                       menuItems={state.menuItems || []}
                       loading={state.loading?.menuItems}
@@ -487,7 +491,7 @@ const OrderModal = ({
                     />
                   </Box>
                 )}
-                <Box flex="1" p={4} bg={panelBg} minH={0} display="flex" flexDirection="column">
+                <Box flex="1" p={{ base: 3, md: 4 }} bg={panelBg} minH={{ base: '240px', lg: 0 }} display="flex" flexDirection="column">
                   {!order && isTakeaway && editable && (
                     <Input
                       size="sm"
@@ -520,8 +524,34 @@ const OrderModal = ({
             )}
           </ModalBody>
 
-          <ModalFooter borderTopWidth="1px" py={3} gap={2} flexWrap="wrap" justifyContent="space-between">
-            <HStack spacing={2} flexWrap="wrap">
+          <ModalFooter borderTopWidth="1px" py={3} px={{ base: 3, md: 6 }} gap={2} flexWrap={compactFooter ? 'nowrap' : 'wrap'} justifyContent="space-between">
+            {compactFooter && order && (
+              <Menu placement="top-start">
+                <MenuButton as={IconButton} aria-label="More actions" icon={<EllipsisVertical size={18} />} variant="outline"
+                  isLoading={unmerging || !!actionBusy} isDisabled={submitting} flexShrink={0} />
+                <MenuList>
+                  <MenuItem icon={<Printer size={16} />} onClick={() => printKOT(order)}>Print KOT</MenuItem>
+                  {(order.items || []).length > 0 && (
+                    <MenuItem icon={<Receipt size={16} />} onClick={() => printBill(order)} isDisabled={draft.length > 0}>Print bill</MenuItem>
+                  )}
+                  {order.status === KITCHEN_PENDING_STATUS && (
+                    <MenuItem icon={<ChefHat size={16} />} onClick={() => sendToKitchen(order)} isDisabled={draft.length > 0}>Send to kitchen</MenuItem>
+                  )}
+                  {mode === 'view' && isEditableOrder(order) && (
+                    <MenuItem icon={<Pencil size={16} />} onClick={() => setMode('edit')}>Edit order</MenuItem>
+                  )}
+                  {isActiveOrder(order) && isMergedOrder(order) && getLinkedTables(order).map((linked) => (
+                    <MenuItem key={linked.id} icon={<Split size={16} />} onClick={() => unmergeTable(linked)} isDisabled={draft.length > 0}>
+                      Unmerge Table {linked.table_number}
+                    </MenuItem>
+                  ))}
+                  {isActiveOrder(order) && draft.length === 0 && (
+                    <MenuItem icon={<XCircle size={16} />} color="red.500" onClick={() => setCancelOpen(true)}>Cancel order</MenuItem>
+                  )}
+                </MenuList>
+              </Menu>
+            )}
+            <HStack spacing={2} flexWrap="wrap" display={compactFooter ? 'none' : 'flex'}>
               {order && (
                 <Button
                   leftIcon={<Printer size={16} />}
@@ -585,9 +615,11 @@ const OrderModal = ({
               )}
             </HStack>
 
-            <HStack spacing={2} flexWrap="wrap">
-              <Button variant="ghost" onClick={handleClose}>Close</Button>
-              {order && isActiveOrder(order) && draft.length === 0 && (
+            {/* Main actions: share the full width on phones */}
+            <HStack spacing={2} flexWrap={compactFooter ? 'nowrap' : 'wrap'} flex={compactFooter ? 1 : undefined}
+              justify="flex-end" sx={compactFooter ? { '& > button': { flex: 1, minW: 0, fontSize: 'sm', px: 2 }, '& > button .chakra-button__icon': { display: 'none' } } : undefined}>
+              {!compactFooter && <Button variant="ghost" onClick={handleClose}>Close</Button>}
+              {!compactFooter && order && isActiveOrder(order) && draft.length === 0 && (
                 <Button variant="ghost" colorScheme="red" onClick={() => setCancelOpen(true)} isDisabled={submitting}>
                   Cancel order
                 </Button>

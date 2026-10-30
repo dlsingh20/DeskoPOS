@@ -20,6 +20,7 @@ import {
   AlertIcon,
   useColorModeValue,
 } from '@chakra-ui/react';
+import { DIALOG_CONTENT, useDialogSize } from './responsive';
 import { Plus, Minus } from 'lucide-react';
 import BackendRequiredNotice from './BackendRequiredNotice';
 import { getBillableItems, getTableLabel } from '../../utils/fineDineUtils';
@@ -31,6 +32,7 @@ export const MOVE_ITEMS_SUPPORTED = false;
  * Pick items (and how many of each) from one table's order and a destination table.
  */
 const MoveItemsDialog = ({ isOpen, onClose, tables, ordersByTable, initialSourceId, formatPrice, onMove }) => {
+  const size = useDialogSize('xl');
   const [sourceId, setSourceId] = useState('');
   const [destinationId, setDestinationId] = useState('');
   const [quantities, setQuantities] = useState({});
@@ -65,9 +67,9 @@ const MoveItemsDialog = ({ isOpen, onClose, tables, ordersByTable, initialSource
   if (!destination) errors.push('Choose where to move the items.');
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside" isCentered>
+    <Modal isOpen={isOpen} onClose={onClose} size={size} scrollBehavior="inside" isCentered>
       <ModalOverlay />
-      <ModalContent borderRadius="16px">
+      <ModalContent {...DIALOG_CONTENT}>
         <ModalHeader>Move items</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
