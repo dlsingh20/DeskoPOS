@@ -3,7 +3,7 @@ import { useToast } from '@chakra-ui/react';
 import orderService from '../../services/OrderService';
 import PrintService from '../../services/PrintService';
 import {
-  buildKOTData,
+  buildKOTTickets,
   getShortOrderNumber,
   KITCHEN_PENDING_STATUS,
   KITCHEN_SENT_STATUS,
@@ -38,14 +38,14 @@ const useOrderActions = ({ onOrderChanged } = {}) => {
 
   /**
    * Print a KOT for the order. Pass `items` to print only those lines, and `kotNumber` when
-   * they are on a numbered KOT.
+   * they are on a numbered KOT. A merged bill prints one KOT per table, each with its table name.
    */
   const printKOT = useCallback(async (order, items = null, kotNumber = null) => {
     const key = `print-${order.id}`;
     if (inFlight.has(key)) return false;
 
-    const kotData = buildKOTData(order, items, kotNumber);
-    if (kotData.items.length === 0) {
+    const tickets = buildKOTTickets(order, items, kotNumber);
+    if (tickets.every((kotData) => kotData.items.length === 0)) {
       toast({ title: 'Nothing to print', description: 'This order has no items yet.', status: 'warning', duration: 3000 });
       return false;
     }
@@ -53,10 +53,12 @@ const useOrderActions = ({ onOrderChanged } = {}) => {
     inFlight.add(key);
     setOrderBusy(order.id, 'print');
     try {
-      await PrintService.printKOT(kotData);
+      for (const kotData of tickets) {
+        await PrintService.printKOT(kotData);
+      }
       toast({
-        title: 'KOT sent to printer',
-        description: `${getShortOrderNumber(order)} · ${kotData.tableNumber}`,
+        title: tickets.length > 1 ? `${tickets.length} KOTs sent to printer` : 'KOT sent to printer',
+        description: `${getShortOrderNumber(order)} · ${tickets.map((t) => t.tableNumber).join(', ')}`,
         status: 'success',
         duration: 2500,
       });

@@ -22,11 +22,15 @@ import {
   AlertDialogHeader,
   AlertDialogBody,
   AlertDialogFooter,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
   useBreakpointValue,
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { Printer, ChefHat, Pencil, Plus, Receipt, Wallet } from 'lucide-react';
+import { Printer, ChefHat, Pencil, Plus, Receipt, Split, Wallet } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
 import { useAccess } from '../../context/AccessContext';
 import orderService from '../../services/OrderService';
@@ -43,6 +47,10 @@ import {
   getOrderStartTime,
   getShortOrderNumber,
   getTableLabel,
+  getLinkedTables,
+  getOrderTableIds,
+  getOrderTablesLabel,
+  isMergedOrder,
   KITCHEN_PENDING_STATUS,
 } from '../../utils/fineDineUtils';
 
@@ -91,6 +99,7 @@ const OrderModal = ({
   const [pendingRemoval, setPendingRemoval] = useState(null);
   const [settleOpen, setSettleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [unmerging, setUnmerging] = useState(false);
   const cancelRemovalRef = useRef(null);
   const submittingRef = useRef(false);
 
@@ -101,12 +110,13 @@ const OrderModal = ({
 
   const { busy, printKOT, printBill, sendToKitchen } = useOrderActions({ onOrderChanged: handleOrderChanged });
 
-  /** Find an open order already on this table (from any terminal) */
+  /** Find an open order already on this table, or the bill it's merged into (from any terminal) */
   const findOpenTableOrder = useCallback(async () => {
     if (!table) return null;
     const orders = await orderService.getOrders({ table_id: table.id, restaurant_id: restaurant.id });
     return orders
-      .filter((o) => isActiveOrder(o) && (o.table === undefined || String(o.table) === String(table.id)))
+      .filter((o) => isActiveOrder(o)
+        && (o.table === undefined || getOrderTableIds(o).some((id) => String(id) === String(table.id))))
       .sort((a, b) => new Date(getOrderStartTime(a)) - new Date(getOrderStartTime(b)))[0] || null;
   }, [table, restaurant]);
 
@@ -184,12 +194,16 @@ const OrderModal = ({
     setDraft((prev) => prev.map((line) => (line.menuItem.id === menuItemId ? { ...line, note } : line)));
   };
 
+  // On a merged bill opened from one of the merged tables, new lines belong to that table
+  const orderingTableId = table && order && String(order.table) !== String(table.id) ? table.id : null;
+
   const toOrderItem = (line) => ({
     menu_item: line.menuItem.id,
     menu_item_id: line.menuItem.id,
     quantity: line.quantity,
     unit_price: parseFloat(line.menuItem.price) || 0,
     special_instructions: line.note.trim(),
+    table: orderingTableId,
   });
 
   // ---- Server actions ------------------------------------------------------
@@ -295,7 +309,10 @@ const OrderModal = ({
       toast({ title: `Added ${added.length} ${added.length === 1 ? 'item' : 'items'}`, status: 'success', duration: 2500 });
     }
 
-    if (printAfter && added.length) await printKOT(fresh, kot?.items?.length ? kot.items : added, kot?.kot_number);
+    // A merged bill can send several KOTs (one per table): each item carries its own number then
+    if (printAfter && added.length) {
+      await printKOT(fresh, kot?.items?.length ? kot.items : added, kot?.kots?.length > 1 ? null : kot?.kot_number);
+    }
 
     submittingRef.current = false;
     setSubmitting(false);
@@ -373,6 +390,29 @@ const OrderModal = ({
     if (item) await changeItem(item, 0);
   };
 
+  /** Take a merged table off the bill; what it ordered moves to an order of its own */
+  const unmergeTable = async (linked) => {
+    if (!window.confirm(`Unmerge Table ${linked.table_number}? Its items move to a separate bill for that table.`)) return;
+    setUnmerging(true);
+    try {
+      const result = await orderService.unmergeTable(order.id, linked.id);
+      toast({
+        title: `Table ${linked.table_number} unmerged`,
+        description: result.new_order ? `Its items are on order ${result.new_order.order_number}.` : 'It had no items, so it is free now.',
+        status: 'success',
+        duration: 4000,
+      });
+      onChanged?.();
+      // Opened from the table that just left: its own order is a different one now
+      if (table && String(table.id) === String(linked.id)) onClose();
+      else setOrder(result.order);
+    } catch (error) {
+      toast({ title: 'Could not unmerge the table', description: error.message, status: 'error', duration: 6000, isClosable: true });
+    } finally {
+      setUnmerging(false);
+    }
+  };
+
   const handleClose = () => {
     if (draft.length > 0 && !window.confirm('You have items that have not been added to the order. Close and discard them?')) {
       return;
@@ -410,6 +450,11 @@ const OrderModal = ({
                   <Text fontSize="sm" color={mutedColor} fontWeight="500">
                     Order {order.order_number} · open {formatElapsed(getOrderStartTime(order))}
                   </Text>
+                  {isMergedOrder(order) && (
+                    <Badge colorScheme="purple" variant="subtle" fontSize="xs" px={2} py={0.5} borderRadius="md">
+                      Merged bill · Tables {getOrderTablesLabel(order)}
+                    </Badge>
+                  )}
                 </>
               )}
               {!order && !loadingOrder && (
@@ -517,6 +562,26 @@ const OrderModal = ({
                 <Button leftIcon={<Pencil size={16} />} variant="ghost" onClick={() => setMode('edit')}>
                   Edit order
                 </Button>
+              )}
+              {order && isActiveOrder(order) && isMergedOrder(order) && (
+                <Menu placement="top-start">
+                  <MenuButton
+                    as={Button}
+                    leftIcon={<Split size={16} />}
+                    variant="ghost"
+                    isLoading={unmerging}
+                    isDisabled={submitting || draft.length > 0}
+                  >
+                    Unmerge
+                  </MenuButton>
+                  <MenuList>
+                    {getLinkedTables(order).map((linked) => (
+                      <MenuItem key={linked.id} onClick={() => unmergeTable(linked)}>
+                        Unmerge Table {linked.table_number}
+                      </MenuItem>
+                    ))}
+                  </MenuList>
+                </Menu>
               )}
             </HStack>
 

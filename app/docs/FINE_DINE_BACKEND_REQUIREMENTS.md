@@ -4,9 +4,9 @@ The Fine Dine dashboard (`src/components/fineDine/`) works with the existing POS
 
 Checked against the API schema at `https://api.staydesko.com/swagger.json` on 2026-10-10.
 
-## 1. Merge tables
+## 1. Merge tables (built)
 
-The UI is in `MergeTableDialog.jsx`. To enable it, set `MERGE_SUPPORTED = true` and wire `onMerge` in `FineDineDashboard.jsx`.
+Merged tables share **one order, so one bill**, but every table keeps taking orders and its KOTs print with its own table name. The UI is `MergeTableDialog.jsx` (merge) and the **Unmerge** menu in `OrderModal.jsx`.
 
 `POST /api/pos/api/orders/merge/`
 
@@ -14,12 +14,30 @@ The UI is in `MergeTableDialog.jsx`. To enable it, set `MERGE_SUPPORTED = true` 
 { "target_table_id": 12, "source_table_ids": [13, 14] }
 ```
 
-- Move every non-cancelled item from the open orders on the source tables into the target table's open order. Create that order if the target has none.
-- Keep quantity, unit price, special instructions, kitchen notes and item status.
-- Recalculate subtotal, tax, service charge and total on the target order.
-- Close the emptied source orders with a status that reports do **not** count as a customer cancellation (for example `merged`, linked to the target order). Then free the source tables.
-- Reject the merge if a source order has payments, if the tables belong to different restaurants, or if fewer than two tables are given.
-- Return the updated target order.
+- The target table holds the bill. Its open order is kept; if it has none, the oldest open order among the tables is used and moved to the target table.
+- The other tables' open orders move into the bill with their lines and KOTs. Each line remembers the table it was ordered from. The emptied orders close as `merged` (`merged_into` points at the bill). Reports and cancellation counts ignore them, and `GET /orders/` leaves them out unless `status` asks for them.
+- Free tables can join the bill too. Every table on the bill shows as occupied, and `GET /orders/?table_id=` finds the bill from any of them.
+- Refused when an order being merged has payments or a discount, when the tables belong to different restaurants, or when none of them has an open order.
+- Returns the bill. Orders carry `linked_tables` (the merged tables) and every item carries `table` / `table_number`.
+
+Ordering and the kitchen:
+
+- `POST /order-items/` takes an optional `table`: the merged table the line is for.
+- `send_kot` makes one KOT per table, each with its own number and table name. The response keeps `kot_number` and `items` (each item with its `kot_number` and `table_number`) and adds `kots: [{ kot_number, table_number, items }]`.
+- The printed bill is one combined list, headed with every table: `1 + 2 + 3`.
+
+`POST /api/pos/api/orders/{id}/unmerge/` with `{ "table_id": 13 }` takes a merged table off the bill before it's settled. The lines it ordered (and their KOTs) move to a new order for that table; a table that never ordered is just freed. Refused for the table holding the bill, and when the bill has payments or a discount.
+
+Settling or cancelling the bill frees every table on it.
+
+## 1a. Split table (built)
+
+**Split Table** (next to Merge Table, `SplitTableDialog.jsx`) seats another party at a table: it adds a temporary table numbered after it, `4-1`, then `4-2`, and so on. Splitting `4-1` continues from table 4.
+
+- `POST /api/pos/api/tables/{id}/split/` returns the new table (`split_from` / `split_from_number` say which table it came from). Anyone who takes orders may split, and any table can be split, including one with a running order: that order stays on its table, and the new table takes its own order and bill.
+- A split table goes away by itself (`is_active = false`) once its bill is settled or cancelled. Its bills keep its number in history, and the number is free for the next split.
+- `POST /api/pos/api/tables/{id}/remove_split/` removes a free split table nobody ordered on (the card's × button). Refused for a table with an open order, or one that isn't a split table.
+- A split table can be merged into another table's bill like any table.
 
 ## 2. Move items between tables
 

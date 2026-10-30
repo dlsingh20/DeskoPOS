@@ -20,7 +20,7 @@ from core.money import MoneyField, money_str
 from core.pagination import StandardPagination
 from core.permissions import require
 from orders.models import Order
-from orders.services import recalculate, record, sync_table
+from orders.services import recalculate, record, sync_order_tables
 from orders.views import _fresh, _locked_order, order_payload
 from outlets.models import TenantSettings
 from outlets.services import outlets_for
@@ -175,7 +175,7 @@ def close_order(request, order, new_status):
         order.invoice_number = document_number(order.outlet, 'invoice', order.business_date)
     order.items.filter(quantity__gt=0).exclude(status='cancelled').update(status='served')
     recalculate(order, request.tenant)  # payment status and version
-    sync_table(order.table)
+    sync_order_tables(order)
 
 
 @api_view(['POST'])

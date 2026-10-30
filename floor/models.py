@@ -22,6 +22,9 @@ class DiningTable(TenantModel, TimestampedModel):
     qr_enabled = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    # Split Table: a temporary table 4-1 seated next to table 4 for another party. It goes away
+    # (is_active = False) once its bill is closed.
+    split_from = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
 
     class Meta:
         db_table = app_table('dining_tables')

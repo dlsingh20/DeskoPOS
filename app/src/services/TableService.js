@@ -115,6 +115,36 @@ class TableService {
   }
 
   /**
+   * DeskoPOS Split Table: add a temporary table next to this one (4 -> 4-1, then 4-2) for another
+   * party. The table's running order stays on it. The new table goes away once its bill closes.
+   * @param {number} tableId - Table to split
+   * @returns {Promise<Object>} The new table
+   */
+  async splitTable(tableId) {
+    try {
+      const response = await ApiClient.post(`${this.baseURL}/tables/${tableId}/split/`, {});
+      return response.data;
+    } catch (error) {
+      console.error('Error splitting table:', error);
+      throw this._handleError(error);
+    }
+  }
+
+  /**
+   * DeskoPOS: remove a split table (like 4-1) that is free and no longer needed
+   * @param {number} tableId - The split table
+   * @returns {Promise<void>}
+   */
+  async removeSplitTable(tableId) {
+    try {
+      await ApiClient.post(`${this.baseURL}/tables/${tableId}/remove_split/`, {});
+    } catch (error) {
+      console.error('Error removing split table:', error);
+      throw this._handleError(error);
+    }
+  }
+
+  /**
    * Get available tables for a restaurant
    * @param {number} restaurantId - Restaurant ID
    * @returns {Promise<Array>} List of available tables

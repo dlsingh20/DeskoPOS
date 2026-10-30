@@ -247,6 +247,39 @@ class OrderService {
   }
 
   /**
+   * DeskoPOS: put tables on one bill (POST orders/merge/). Each table keeps taking orders and
+   * its KOTs keep its name. Returns the combined order.
+   * @param {number} targetTableId - the table that holds the bill
+   * @param {number[]} sourceTableIds - the tables merged into it
+   */
+  async mergeTables(targetTableId, sourceTableIds) {
+    try {
+      const response = await ApiClient.post(`${this.baseURL}/orders/merge/`, {
+        target_table_id: targetTableId,
+        source_table_ids: sourceTableIds,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error merging tables:', error);
+      throw this._handleError(error);
+    }
+  }
+
+  /**
+   * DeskoPOS: take a merged table off the bill (POST orders/{id}/unmerge/). The lines it
+   * ordered move to a new order of its own. Returns { order, new_order }.
+   */
+  async unmergeTable(orderId, tableId) {
+    try {
+      const response = await ApiClient.post(`${this.baseURL}/orders/${orderId}/unmerge/`, { table_id: tableId });
+      return response.data;
+    } catch (error) {
+      console.error('Error unmerging table:', error);
+      throw this._handleError(error);
+    }
+  }
+
+  /**
    * DeskoPOS: refund all or part of a settled bill (POST orders/{id}/refund/).
    * @param {Object} refund - { refunds: [{payment_id, amount, method?, reference?}], reason, note,
    *   approvalId, cashRegisterId, idempotencyKey }
@@ -431,7 +464,9 @@ class OrderService {
           menu_item: item.menu_item_id,
           quantity: item.quantity,
           special_instructions: item.special_instructions || '',
-          unit_price: item.unit_price || item.price
+          unit_price: item.unit_price || item.price,
+          // DeskoPOS: the merged table ordering on this bill (its KOT prints with that table's name)
+          ...(item.table ? { table: item.table } : {}),
         })
       );
       

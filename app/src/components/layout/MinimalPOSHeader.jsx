@@ -33,7 +33,6 @@ import {
   User,
   Settings,
   LogOut,
-  LayoutGrid,
   ShoppingBag,
   Users,
   Archive,
@@ -143,14 +142,9 @@ const MinimalPOSHeader = ({ onLogout }) => {
     { path: '/third-party', label: 'Third Party', icon: Globe },
   ];
 
-  // Side navigation (opened from the hamburger menu)
+  // Side navigation (opened from the hamburger menu). Orders are taken on Fine Dine (dine-in and
+  // takeaway); the menu itself is managed in Product Management.
   const navigationItems = [
-    {
-      path: '/menu',
-      label: 'Menu',
-      icon: LayoutGrid,
-      isActive: false,
-    },
     {
       path: '/reports',
       label: 'Reports',

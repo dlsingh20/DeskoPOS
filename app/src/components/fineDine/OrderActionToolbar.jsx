@@ -10,10 +10,10 @@ import {
   Text,
   useColorModeValue,
 } from '@chakra-ui/react';
-import { Merge, ArrowLeftRight, Radio, Plus, RefreshCw, X } from 'lucide-react';
+import { Merge, ArrowLeftRight, Radio, Plus, RefreshCw, SquareSplitHorizontal, X } from 'lucide-react';
 
 /**
- * Action bar under the top navigation: Merge Table, Move Items, Live Orders,
+ * Action bar under the top navigation: Merge Table, Split Table, Move Items, Live Orders,
  * plus Add Table and refresh on the right.
  */
 const OrderActionToolbar = ({
@@ -21,6 +21,7 @@ const OrderActionToolbar = ({
   mergeSelectionCount,
   onToggleMerge,
   onConfirmMerge,
+  onSplit,
   onMoveItems,
   liveOrders,
   onLiveOrders,
@@ -65,6 +66,20 @@ const OrderActionToolbar = ({
             aria-pressed={mergeMode}
           >
             {mergeMode ? 'Cancel merge' : 'Merge Table'}
+          </Button>
+          <Button
+            size="sm"
+            leftIcon={<SquareSplitHorizontal size={16} />}
+            colorScheme="purple"
+            variant="outline"
+            bg={mergeBg}
+            color={mergeColor}
+            borderWidth="1px"
+            borderColor={mergeBorder}
+            onClick={onSplit}
+            isDisabled={mergeMode}
+          >
+            Split Table
           </Button>
           <Button
             size="sm"

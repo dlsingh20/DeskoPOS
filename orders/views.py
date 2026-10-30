@@ -24,8 +24,11 @@ from outlets.views import outlet_from_param
 from payments.services import payment_payload, refund_payload
 
 from . import pricing
-from .models import OPEN_STATUSES, ItemVoid, Kot, Order, OrderItem, OrderItemTax
-from .services import business_date, history_start, new_order_number, next_number, recalculate, record, sync_table
+from .models import OPEN_STATUSES, ItemVoid, Kot, Order, OrderItem, OrderItemTax, OrderTable
+from .services import (
+    business_date, history_start, new_order_number, next_number, open_order_of_table, recalculate, record,
+    sync_order_tables, sync_table,
+)
 
 KITCHEN_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served']
 ITEM_STATUS_FOR_ORDER = {'preparing': 'preparing', 'ready': 'ready', 'served': 'served'}
@@ -48,11 +51,19 @@ def decimals_of(request):
 
 # ---- Reading ------------------------------------------------------------------
 
-def item_payload(item, decimals):
+def item_table(item, order_table):
+    """The table a line was ordered from: its merged table, else the order's own."""
+    return item.table if item.table_id else order_table
+
+
+def item_payload(item, decimals, order_table=None):
     m = lambda v: money_str(v, decimals)  # noqa: E731
+    table = item_table(item, order_table)
     return {
         'id': item.id,
         'order': item.order_id,
+        'table': table.id if table else None,
+        'table_number': table.table_number if table else None,
         'menu_item': item.product_id,
         'menu_item_name': item.menu_item_name,
         'category_name': item.category_name,
@@ -90,6 +101,7 @@ def order_payload(order, request):
     decimals = decimals_of(request)
     m = lambda v: money_str(v, decimals)  # noqa: E731
     items = list(order.items.all())
+    linked = [link.table for link in order.linked_tables.all()]
     return {
         'id': order.id,
         'order_number': order.order_number,
@@ -99,6 +111,9 @@ def order_payload(order, request):
         'table': order.table_id,
         'table_number': order.table.table_number if order.table else None,
         'table_name': order.table.name if order.table else None,
+        # Tables merged into this order: they share its bill (see OrderTable)
+        'linked_tables': [{'id': t.id, 'table_number': t.table_number, 'name': t.name} for t in linked],
+        'merged_into': order.merged_into_id,
         'type': order.type,
         'status': order.status,
         'payment_status': order.payment_status,
@@ -115,7 +130,7 @@ def order_payload(order, request):
         'waiter_name': order.server.full_name if order.server else None,
         'created_by': person(order.created_by),
         'created_by_name': order.created_by.full_name if order.created_by else None,
-        'items': [item_payload(i, decimals) for i in items],
+        'items': [item_payload(i, decimals, order.table) for i in items],
         'total_items': sum(i.quantity for i in items),
         'subtotal': m(order.subtotal),
         'discount_type': order.discount_type or None,
@@ -158,7 +173,7 @@ def _orders(request):
     return (qs
             .select_related('outlet', 'table', 'server', 'created_by', 'closed_by', 'cancelled_by',
                             'cancel_approved_by', 'discounted_by', 'discount_approved_by')
-            .prefetch_related('items__taxes', 'items__kot', 'payments__payment_method', 'payments__received_by', 'tips',
+            .prefetch_related('items__taxes', 'items__kot', 'items__table', 'linked_tables__table', 'payments__payment_method', 'payments__received_by', 'tips',
                               'refunds__lines', 'refunds__refunded_by', 'refunds__approved_by'))
 
 
@@ -233,18 +248,28 @@ def _free_table(outlet, table_id, order=None):
     table = DiningTable.objects.select_for_update().filter(id=table_id, outlet=outlet, is_active=True).first()
     if table is None:
         raise ApiError('No such table in this restaurant.', code='invalid', fields={'table': ['No such table.']})
-    other = Order.objects.filter(table=table, status__in=OPEN_STATUSES).exclude(id=getattr(order, 'id', None)).first()
-    if other:
+    other = open_order_of_table(table)
+    if other and other.id != getattr(order, 'id', None):
         raise Conflict(f'Table {table.table_number} already has an open order ({other.order_number}). '
                        'Add the items to it.', code='table_has_order', order_id=other.id)
     return table
 
 
-def add_line(order, product, quantity, note, user):
+def _order_table(order, table_id):
+    """The table a new line is for: the order's own (None) or one merged into it."""
+    if not table_id or table_id == order.table_id:
+        return None
+    link = order.linked_tables.select_related('table').filter(table_id=table_id).first()
+    if link is None:
+        raise ApiError("This table isn't part of this order.", code='invalid', fields={'table': ['Not on this order.']})
+    return link.table
+
+
+def add_line(order, product, quantity, note, user, table=None):
     item = OrderItem.objects.create(
         order=order, product=product, menu_item_name=product.name, category_name=product.category.name,
         unit_price=product.price, quantity=quantity, special_instructions=(note or '').strip(),
-        discountable=product.discountable, created_by=user)
+        discountable=product.discountable, created_by=user, table=table)
     OrderItemTax.objects.bulk_create([
         OrderItemTax(item=item, tax=t['tax'], name=t['name'], type=t['type'], rate=t['rate'], amount=t['amount'],
                      fixed_basis=t['fixed_basis'], tenant_id=item.tenant_id)
@@ -263,10 +288,13 @@ class OrderList(generics.GenericAPIView):
             qs = qs.filter(outlet=outlet)
         if params.get('status'):
             qs = qs.filter(status__in=params['status'].split(','))
+        else:
+            qs = qs.exclude(status='merged')  # emptied into another table's bill: not a bill of its own
         if params.get('type'):
             qs = qs.filter(type=params['type'])
         if params.get('table_id'):
-            qs = qs.filter(table_id=params['table_id'])
+            # A merged table finds the order it's merged into too
+            qs = qs.filter(Q(table_id=params['table_id']) | Q(linked_tables__table_id=params['table_id'])).distinct()
         if params.get('date_from'):
             qs = qs.filter(business_date__gte=params['date_from'][:10])
         if params.get('date_to'):
@@ -324,6 +352,8 @@ class OrderDetail(generics.GenericAPIView):
             raise Conflict(f"This order is {order.status}, so it can't be changed.", code='order_closed')
         old_table = order.table
         if 'table' in changes and changes['table'] != order.table_id:
+            if order.linked_tables.exists():
+                raise Conflict('Unmerge the merged tables before moving this order.', code='tables_merged')
             order.table = _free_table(order.outlet, changes['table'], order) if changes['table'] else None
         for field in GUEST_TEXT_FIELDS:
             if field in changes:
@@ -355,7 +385,7 @@ def update_status(request, pk):
         raise Conflict('Settle the bill first.', code='not_paid')
     if order.status == 'pending' and new_status != 'pending':
         # The app sends an order to the kitchen by confirming it: its unsent items go on a KOT
-        _new_kot(order, request.user)
+        _new_kots(order, request.user)
     order.status = new_status
     if new_status == 'served' and not order.served_at:
         order.served_at = timezone.now()
@@ -366,7 +396,7 @@ def update_status(request, pk):
         order.items.filter(quantity__gt=0).exclude(status='cancelled').update(status=ITEM_STATUS_FOR_ORDER[new_status])
     order.version += 1
     order.save()
-    sync_table(order.table)
+    sync_order_tables(order)
     record(order, 'status', request.user, status=new_status)
     return Response(_fresh(request, order.id))
 
@@ -385,7 +415,7 @@ def _cancel(request, pk):
     order.version += 1
     order.save()
     order.items.update(status='cancelled')
-    sync_table(order.table)
+    sync_order_tables(order)
     record(order, 'cancelled', request.user, reason=reason)
     audit.record(request, 'order.cancel', 'order', order.id, approval=approval,
                  after={'order_number': order.order_number, 'reason': reason, 'total': str(order.total_amount)})
@@ -397,41 +427,64 @@ def cancel(request, pk):
     return _cancel(request, pk)
 
 
-def _new_kot(order, user):
-    """Put the order's unsent items on the next numbered KOT; None when there are none."""
-    items = list(order.items.filter(kot__isnull=True, quantity__gt=0))
-    if not items:
-        return None, []
-    kot = Kot.objects.create(order=order, number=next_number(order.outlet, 'kot', order.business_date), sent_by=user)
-    OrderItem.objects.filter(id__in=[i.id for i in items]).update(kot=kot)
-    record(order, 'kot', user, kot_number=kot.number, items=len(items))
-    return kot, items
+def _new_kots(order, user):
+    """
+    Put the order's unsent items on the next numbered KOT, one KOT per table the lines were
+    ordered from (merged tables), so each ticket names its table. [] when nothing is waiting.
+    """
+    items = list(order.items.filter(kot__isnull=True, quantity__gt=0).select_related('table').order_by('id'))
+    by_table = {}
+    for item in items:
+        by_table.setdefault(item.table_id, []).append(item)
+    kots = []
+    for lines in by_table.values():
+        kot = Kot.objects.create(order=order, number=next_number(order.outlet, 'kot', order.business_date), sent_by=user,
+                                 table=lines[0].table)
+        OrderItem.objects.filter(id__in=[i.id for i in lines]).update(kot=kot)
+        for line in lines:
+            line.kot = kot
+        record(order, 'kot', user, kot_number=kot.number, items=len(lines),
+               table=getattr(kot.table or order.table, 'table_number', None))
+        kots.append((kot, lines))
+    return kots
+
+
+def _kot_out(order, kot, items):
+    table = kot.table or order.table
+    return {'kot_number': kot.number, 'table': table.id if table else None,
+            'table_number': table.table_number if table else None, 'sent_at': when(kot.sent_at),
+            'items': [{'id': i.id, 'menu_item_name': i.menu_item_name, 'quantity': i.quantity,
+                       'special_instructions': i.special_instructions, 'kot_number': kot.number,
+                       'table_number': table.table_number if table else None} for i in items]}
 
 
 @api_view(['POST'])
 def send_kot(request, pk):
-    """New items go to the kitchen on one numbered KOT; reprint_kot_number returns an earlier one again."""
+    """
+    New items go to the kitchen on numbered KOTs (one per merged table); reprint_kot_number
+    returns an earlier one again. kot_number/items describe the first KOT and every item; kots lists each.
+    """
     reprint = request.data.get('reprint_kot_number')
     if reprint:
         order = generics.get_object_or_404(_orders(request), pk=pk)
-        kot = order.kots.filter(number=reprint).first()
+        kot = order.kots.select_related('table').filter(number=reprint).first()
         if kot is None:
             raise ApiError(f'This order has no KOT {reprint}.', code='not_found', status_code=404)
         Kot.objects.filter(id=kot.id).update(print_count=F('print_count') + 1)
-        items = list(kot.items.filter(quantity__gt=0))
+        kots = [_kot_out(order, kot, kot.items.filter(quantity__gt=0))]
     else:
         order = _locked_order(request, pk)
-        kot, items = _new_kot(order, request.user)
-        if kot is None:
+        created = _new_kots(order, request.user)
+        if not created:
             raise Conflict('There are no new items to send to the kitchen.', code='nothing_to_send')
         if order.status == 'pending':
             order.status = 'confirmed'
             order.version += 1
             order.save(update_fields=['status', 'version', 'updated_at'])
+        kots = [_kot_out(order, kot, items) for kot, items in created]
     return Response({
-        'order_id': order.id, 'kot_number': kot.number, 'is_reprint': bool(reprint), 'sent_at': when(kot.sent_at),
-        'items': [{'id': i.id, 'menu_item_name': i.menu_item_name, 'quantity': i.quantity,
-                   'special_instructions': i.special_instructions} for i in items],
+        'order_id': order.id, 'kot_number': kots[0]['kot_number'], 'is_reprint': bool(reprint),
+        'sent_at': kots[0]['sent_at'], 'items': [i for k in kots for i in k['items']], 'kots': kots,
     })
 
 
@@ -460,6 +513,147 @@ def kitchen_stats(request):
     })
 
 
+# ---- Merged tables ------------------------------------------------------------
+#
+# Merged tables share one order, and so one bill. Each table keeps taking orders: its lines
+# (and KOTs) remember the table, so KOTs print with that table's name. Unmerging moves a
+# table's lines back to an order of its own.
+
+class MergeSerializer(serializers.Serializer):
+    target_table_id = serializers.IntegerField()
+    source_table_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1, max_length=50)
+
+
+class UnmergeSerializer(serializers.Serializer):
+    table_id = serializers.IntegerField()
+
+
+def _make_bill_table(order, table):
+    """Make a merged table the order's own; the previous one becomes merged. Lines keep their table."""
+    old = order.table
+    for model in (OrderItem, Kot):
+        model.objects.filter(order=order, table__isnull=True).update(table=old)
+        model.objects.filter(order=order, table=table).update(table=None)
+    OrderTable.objects.filter(order=order, table=table).delete()
+    if old:
+        OrderTable.objects.create(order=order, table=old)
+    order.table = table
+    order.save(update_fields=['table', 'updated_at'])
+
+
+def _check_can_combine(order, action):
+    if order.amount_paid > 0:
+        raise Conflict(f"Order {order.order_number} has payments, so it can't be {action}.", code='has_payments')
+    if order.discount_amount > 0 or order.discount_type:
+        raise Conflict(f'Remove the discount on order {order.order_number} first.', code='has_discount')
+
+
+@api_view(['POST'])
+def merge_tables(request):
+    """
+    Put two or more tables on one bill: the target table's order (or the oldest one when it has
+    none) takes the other tables' lines, and their emptied orders close as 'merged'.
+    """
+    body = MergeSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    target_id = body.validated_data['target_table_id']
+    ids = list(dict.fromkeys([target_id] + body.validated_data['source_table_ids']))
+    if len(ids) < 2:
+        raise ApiError('Choose at least two tables.', code='invalid', fields={'source_table_ids': ['Choose another table.']})
+    tables = {t.id: t for t in DiningTable.objects.select_for_update()
+              .filter(id__in=ids, is_active=True, outlet__in=outlets_for(request.user))}
+    if len(tables) != len(ids):
+        raise ApiError('No such table.', code='invalid', fields={'source_table_ids': ['No such table.']})
+    if len({t.outlet_id for t in tables.values()}) > 1:
+        raise ApiError("Tables of different restaurants can't be merged.", code='invalid')
+
+    found = {}
+    for table_id in ids:
+        order = open_order_of_table(tables[table_id])
+        if order:
+            found.setdefault(order.id, order)
+    if not found:
+        raise Conflict('None of these tables has an open order to merge.', code='no_open_order')
+    locked = {o.id: o for o in Order.objects.select_for_update().filter(id__in=found)}
+    target_order = open_order_of_table(tables[target_id])
+    bill = locked[target_order.id] if target_order else min(locked.values(), key=lambda o: (o.created_at, o.id))
+    others = [locked[i] for i in found if i != bill.id]
+    for order in others:
+        _check_can_combine(order, 'merged')
+
+    now = timezone.now()
+    for order in others:
+        for model in (OrderItem, Kot):
+            model.objects.filter(order=order, table__isnull=True).update(table=order.table)
+            model.objects.filter(order=order).update(order=bill)
+        OrderTable.objects.filter(order=order).update(order=bill)
+        OrderTable.objects.create(order=bill, table=order.table)
+        if bill.status == 'pending' and order.status != 'pending':
+            bill.status = 'confirmed'  # some lines are already in the kitchen
+        if order.guest_count:
+            bill.guest_count = (bill.guest_count or 0) + order.guest_count
+        order.status = 'merged'
+        order.merged_into = bill
+        order.closed_at = now
+        order.closed_by = request.user
+        recalculate(order, request.tenant)  # no lines left: totals are zero
+        record(order, 'merged', request.user, into=bill.order_number)
+
+    on_bill = {bill.table_id, *bill.linked_tables.values_list('table_id', flat=True)}
+    for table_id in ids:
+        if table_id not in on_bill:
+            OrderTable.objects.create(order=bill, table=tables[table_id])  # a free table joins the bill
+    if bill.table_id != target_id:
+        _make_bill_table(bill, tables[target_id])
+    recalculate(bill, request.tenant)
+    sync_order_tables(bill)
+    numbers = [tables[i].table_number for i in ids]
+    record(bill, 'tables_merged', request.user, tables=numbers, orders=[o.order_number for o in others])
+    audit.record(request, 'order.merge_tables', 'order', bill.id,
+                 after={'order_number': bill.order_number, 'tables': numbers, 'merged_orders': [o.order_number for o in others]})
+    return Response(_fresh(request, bill.id))
+
+
+@api_view(['POST'])
+def unmerge_table(request, pk):
+    """Take a merged table off the bill: the lines it ordered move to a new order of its own."""
+    body = UnmergeSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    table_id = body.validated_data['table_id']
+    order = _locked_order(request, pk)
+    if table_id == order.table_id:
+        raise Conflict(f'Table {order.table.table_number} holds the bill. Unmerge the other tables instead.',
+                       code='bill_table')
+    link = order.linked_tables.filter(table_id=table_id).first()
+    if link is None:
+        raise ApiError("This table isn't merged into this order.", code='invalid', fields={'table_id': ['Not merged here.']})
+    _check_can_combine(order, 'unmerged')
+    table = DiningTable.objects.select_for_update().get(id=link.table_id)
+    link.delete()
+
+    lines = OrderItem.objects.filter(order=order, table=table)
+    new = None
+    if lines.exists():
+        sent = lines.filter(kot__isnull=False).exists()
+        day = business_date(order.outlet, request.tenant)
+        new = Order.objects.create(
+            outlet=order.outlet, table=table, type=order.type, business_date=day, order_number=new_order_number(order.outlet, day),
+            status=order.status if sent and order.status != 'pending' else ('confirmed' if sent else 'pending'),
+            server=order.server, created_by=request.user)
+        Kot.objects.filter(order=order, table=table).update(order=new, table=None)
+        lines.update(order=new, table=None)
+        recalculate(new, request.tenant)
+        record(new, 'unmerged', request.user, from_order=order.order_number)
+    recalculate(order, request.tenant)
+    sync_table(table)
+    record(order, 'table_unmerged', request.user, table=table.table_number,
+           new_order=new.order_number if new else None)
+    audit.record(request, 'order.unmerge_table', 'order', order.id,
+                 after={'order_number': order.order_number, 'table': table.table_number,
+                        'new_order': new.order_number if new else None})
+    return Response({'order': _fresh(request, order.id), 'new_order': _fresh(request, new.id) if new else None})
+
+
 # ---- Items --------------------------------------------------------------------
 
 def _sent_to_kitchen(order):
@@ -480,11 +674,13 @@ def _locked_item(request, pk):
 
 
 def _item_out(item_id, decimals):
-    return item_payload(OrderItem.objects.select_related('kot').prefetch_related('taxes').get(id=item_id), decimals)
+    item = OrderItem.objects.select_related('kot', 'table', 'order__table').prefetch_related('taxes').get(id=item_id)
+    return item_payload(item, decimals, item.order.table)
 
 
 class AddItemSerializer(NewItemSerializer):
     order = serializers.IntegerField()
+    table = serializers.IntegerField(required=False, allow_null=True)  # a merged table ordering on this bill
 
 
 @api_view(['POST'])
@@ -494,7 +690,8 @@ def add_item(request):
     data = body.validated_data
     order = _locked_order(request, data['order'])
     product = _product_for(order.outlet, data['menu_item'])
-    item = add_line(order, product, data['quantity'], data.get('special_instructions'), request.user)
+    item = add_line(order, product, data['quantity'], data.get('special_instructions'), request.user,
+                    table=_order_table(order, data.get('table')))
     recalculate(order, request.tenant)
     record(order, 'item_added', request.user, item=item.id, name=item.menu_item_name, quantity=item.quantity)
     return Response(_item_out(item.id, decimals_of(request)), status=status.HTTP_201_CREATED)

@@ -19,7 +19,7 @@ import orderService from '../../services/OrderService';
 import { IS_DESKOPOS } from '../../services/backend';
 import PrintService from '../../services/PrintService';
 import printSettingsService from '../../services/PrintSettingsService';
-import { buildKOTData, KITCHEN_PENDING_STATUS } from '../../utils/fineDineUtils';
+import { buildKOTData, buildKOTTickets, KITCHEN_PENDING_STATUS } from '../../utils/fineDineUtils';
 import { pendingQrItems } from '../../utils/tableQr';
 
 const POLL_MS = 15000;
@@ -104,8 +104,10 @@ const QrOrderWatcher = () => {
   const sendToKitchen = useCallback(async (order, items) => {
     if (IS_DESKOPOS) {
       // The service numbers the KOT and sends a pending order to the kitchen in one step
+      // (one KOT per table when the table is merged into another table's bill)
       const kot = await orderService.sendKot(order.id);
-      await PrintService.printKOT(buildKOTData(order, kot?.items?.length ? kot.items : items, kot?.kot_number));
+      const tickets = buildKOTTickets(order, kot?.items?.length ? kot.items : items, kot?.kots?.length > 1 ? null : kot?.kot_number);
+      for (const kotData of tickets) await PrintService.printKOT(kotData);
       return;
     }
     await PrintService.printKOT(buildKOTData(order, items));
