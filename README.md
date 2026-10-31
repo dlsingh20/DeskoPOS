@@ -64,6 +64,14 @@ npm test
 
 Set `VITE_API_BASE_URL` when the service runs elsewhere. Sign in with the email and password from `create_platform_user`. The authenticator code is off for now; set `PLATFORM_REQUIRE_TOTP=true` on the service and `VITE_REQUIRE_TOTP=true` on the console to ask for it again. Likewise `SIGNIN_EMAIL_CODE=true` turns the emailed sign-in code back on for client Administrators and Managers. Owners and admins can change clients; support staff can only look.
 
+### Onboarding forms (IRF)
+
+**Onboarding** in the console makes an Information Request Form for a new client and gives a secret link (`/irf/<token>/`, served by this service). The client fills it in on any device: business, contacts, outlets and tables, billing and taxes, the menu as an Excel sheet, staff, payments and printing. Answers save as they type, and **Submit** checks the required ones. A submitted form is read only for the client until it is reopened. In the console you can review the answers, fill in what the client did not share (**Edit answers**, an edit link valid for 8 hours), make a new link, and download the answers as **PDF** or **JSON**. The JSON (`deskopos.irf/1`) is what creating the restaurant from the form will read.
+
+The questions are defined once in `console/irf_schema.py`; the page (`console/irf_page.html`), the server checks and the PDF all follow it. Files are kept in the database (up to 10 MB each, 15 per form). Set `IRF_BASE_URL` (for example `https://api.posdesko.com`) so links use the public address.
+
+**Create restaurant** (on a submitted form) or **Import JSON** (on the Onboarding list, for an export you may have edited) creates the client from the answers (`console/irf_import.py`). A preview shows what will be made and anything that blocks it (a login ID another client uses, a table listed twice) before anything is written. The import creates the client as Pending with the usual defaults, then sets billing rules, outlets, cash counters, tables, bill print settings, taxes, payment methods, the Administrator and staff (temporary passwords, shown once; login IDs are made up for staff without one), and the menu from an .xlsx or .csv sheet (`console/menu_sheet.py` finds the Name / Category / Price columns, category heading rows and sheet names). Only the taxes on the form are created, never the country defaults, plus the service charge from the billing rules as a tax (dine-in only when the form says so). Taxes for every item go on every menu category; taxes for some items (VAT on liquor) are left for you to assign. Timed menus, the bill header text and delivery platforms are kept in the client's settings for reference and set up by hand.
+
 ## Layout
 
 | Folder | What |

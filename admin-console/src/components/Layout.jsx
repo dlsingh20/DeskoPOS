@@ -32,6 +32,7 @@ export default function Layout({ children }) {
             <Text fontWeight="bold" fontSize="lg">DeskoPOS <Text as="span" color="brand.600">Super Admin</Text></Text>
             <HStack spacing={1} flex="1">
               <NavItem to="/clients">Clients</NavItem>
+              <NavItem to="/onboarding">Onboarding</NavItem>
               <NavItem to="/activity">Activity</NavItem>
             </HStack>
             <HStack spacing={3}>

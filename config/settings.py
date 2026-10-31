@@ -25,6 +25,8 @@ def env_bool(name, default=False):
 DEBUG = env_bool('DEBUG', False)
 # Super Admin authenticator (TOTP) code at sign-in. Off for now: email + password only
 PLATFORM_REQUIRE_TOTP = env_bool('PLATFORM_REQUIRE_TOTP', False)
+# Where clients open their Information Request Form, e.g. https://api.posdesko.com (blank = this server)
+IRF_BASE_URL = env('IRF_BASE_URL', '').rstrip('/')
 # Development only: Super Admin sign-in from this computer skips the authenticator code
 PLATFORM_SKIP_TOTP_LOCAL = DEBUG and env_bool('PLATFORM_SKIP_TOTP_LOCAL', True)
 SECRET_KEY = env('SECRET_KEY') or ('dev-only-insecure-key-never-use-in-production' if DEBUG or env('PYTEST_VERSION') else None)
@@ -115,6 +117,7 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [o.strip() for o in env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://localhost:3100').split(',') if o.strip()]
 from corsheaders.defaults import default_headers  # noqa: E402
 CORS_ALLOW_HEADERS = (*default_headers, 'idempotency-key', 'x-outlet-id', 'if-match')
+CORS_EXPOSE_HEADERS = ['Content-Disposition']  # file names of downloads (onboarding PDF / JSON)
 
 EMAIL_BACKEND = env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'AppDesko POS <no-reply@appdesko.com>')
