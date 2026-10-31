@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import onboarding, views
 
 urlpatterns = [
     path('auth/login/', views.platform_login),
@@ -15,4 +15,14 @@ urlpatterns = [
     path('plans/', views.PlanList.as_view()),
     path('countries/', views.CountryList.as_view()),
     path('audit/', views.AuditList.as_view()),
+    path('onboarding/', onboarding.FormListCreate.as_view()),
+    path('onboarding/import/preview/', onboarding.ImportPreview.as_view()),
+    path('onboarding/import/', onboarding.ImportRun.as_view()),
+    path('onboarding/<int:pk>/', onboarding.FormDetail.as_view()),
+    path('onboarding/<int:pk>/reopen/', onboarding.FormReopen.as_view()),
+    path('onboarding/<int:pk>/new-link/', onboarding.FormNewLink.as_view()),
+    path('onboarding/<int:pk>/edit-link/', onboarding.FormEditLink.as_view()),
+    path('onboarding/<int:pk>/export.json', onboarding.FormExportJson.as_view()),
+    path('onboarding/<int:pk>/export.pdf', onboarding.FormExportPdf.as_view()),
+    path('onboarding/<int:pk>/files/<int:file_id>/', onboarding.FormFile.as_view()),
 ]

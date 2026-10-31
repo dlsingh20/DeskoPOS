@@ -44,6 +44,7 @@ export class ApiError extends Error {
     this.status = status;
     this.code = body?.code;
     this.fields = body?.fields || {};
+    this.body = body || {};
   }
 }
 
@@ -93,7 +94,45 @@ export const platform = {
   plans: () => api('/api/platform/plans/'),
   countries: () => api('/api/platform/countries/'),
   audit: (query) => api('/api/platform/audit/', { query }),
+  onboardingForms: (query) => api('/api/platform/onboarding/', { query }),
+  onboardingForm: (id) => api(`/api/platform/onboarding/${id}/`),
+  createOnboardingForm: (body) => api('/api/platform/onboarding/', { method: 'POST', body }),
+  deleteOnboardingForm: (id) => api(`/api/platform/onboarding/${id}/`, { method: 'DELETE' }),
+  reopenOnboardingForm: (id) => api(`/api/platform/onboarding/${id}/reopen/`, { method: 'POST', body: {} }),
+  newOnboardingLink: (id) => api(`/api/platform/onboarding/${id}/new-link/`, { method: 'POST', body: {} }),
+  importPreview: (body) => api('/api/platform/onboarding/import/preview/', { method: 'POST', body }),
+  importRestaurant: (body) => api('/api/platform/onboarding/import/', { method: 'POST', body }),
+  onboardingEditLink: (id) => api(`/api/platform/onboarding/${id}/edit-link/`, { method: 'POST', body: {} }),
+  // kind: pdf | json
+  downloadOnboardingExport: (form, kind) => downloadFile(`/api/platform/onboarding/${form.id}/export.${kind}`,
+    `IRF-${form.id}.${kind}`),
+  downloadOnboardingFile: (id, file) => downloadFile(`/api/platform/onboarding/${id}/files/${file.id}/`, file.name),
 };
+
+/** Fetch a file with the session token and hand it to the browser as a download */
+export async function downloadFile(path, fallbackName) {
+  const headers = {};
+  const token = session.token();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { headers });
+  } catch {
+    throw new ApiError(0, { code: 'network', detail: `Can't reach the server at ${API_BASE}. Is it running?` });
+  }
+  if (response.status === 401 && token) {
+    session.clear();
+    unauthorizedHandler();
+  }
+  if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => null));
+  const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '')?.[1] || fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 /** Roles that may change clients; the others only read */
 export const canManage = (user) => ['owner', 'admin'].includes(user?.role);

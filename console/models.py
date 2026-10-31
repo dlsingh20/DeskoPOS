@@ -175,3 +175,50 @@ class PlatformAuditLog(models.Model):
     class Meta:
         db_table = platform_table('platform_audit_log')
         ordering = ['-id']
+
+
+class OnboardingForm(models.Model):
+    """
+    An Information Request Form sent to a new client. The client fills it in through a secret
+    link (token), saving as often as they like, then submits it. The answers (data) follow
+    console.irf_schema; files such as the menu sheet are OnboardingFile rows.
+    """
+    STATUSES = ['draft', 'submitted']
+
+    token = models.CharField(max_length=64, unique=True)
+    title = models.TextField()  # the client's name, for the Super Admin list
+    contact_name = models.TextField(blank=True, default='')
+    contact_email = models.TextField(blank=True, default='')
+    contact_phone = models.TextField(blank=True, default='')
+    notes = models.TextField(blank=True, default='')  # internal, never shown to the client
+    status = models.CharField(max_length=12, default='draft', choices=[(s, s) for s in STATUSES])
+    data = models.JSONField(default=dict, blank=True)
+    version = models.IntegerField(default=1)  # bumped on every save; stops two editors overwriting each other
+    last_saved_by = models.TextField(blank=True, default='')  # 'client' or the Super Admin's email
+    last_saved_at = models.DateTimeField(null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    # Set once the restaurant has been created from this form (next stage)
+    tenant = models.ForeignKey(Tenant, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_by = models.ForeignKey(PlatformUser, on_delete=models.PROTECT, null=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = platform_table('onboarding_forms')
+        ordering = ['-id']
+
+
+class OnboardingFile(models.Model):
+    """A file attached to an onboarding form (menu sheet, logo). Kept in the database."""
+    form = models.ForeignKey(OnboardingForm, on_delete=models.CASCADE, related_name='files')
+    field = models.CharField(max_length=60)  # 'menu.files', 'printing.logo'
+    name = models.TextField()
+    content_type = models.TextField()
+    size = models.IntegerField()
+    content = models.BinaryField()
+    uploaded_by = models.TextField(blank=True, default='')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = platform_table('onboarding_files')
+        ordering = ['id']
