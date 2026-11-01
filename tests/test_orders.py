@@ -248,3 +248,45 @@ def test_fixed_taxes_per_unit_and_per_bill():
     results, totals = calculate(lines, decimals=3)
     assert [r['tax_amount'] for r in results] == [Decimal('20.500'), Decimal('0')]
     assert totals['total_amount'] == Decimal('24.500')
+
+# ---- Service charge ----
+
+VAT = [{'key': 1, 'name': 'VAT', 'type': 'percentage', 'rate': '7', 'amount': None, 'fixed_basis': None}]
+
+
+def test_service_charge_is_added_on_top_and_taxed():
+    # 100 + 10% service = 110, VAT 7% of 110 = 7.70, total 117.70
+    results, totals = calculate([{'unit_price': '100', 'quantity': 1, 'taxes': VAT}], decimals=2,
+                                service_charge_rate=Decimal('10'))
+    assert (totals['service_charge'], totals['tax_amount'], totals['total_amount']) ==         (Decimal('10.00'), Decimal('7.70'), Decimal('117.70'))
+    assert results[0]['tax_amounts'] == [Decimal('7.70')]
+
+
+def test_service_charge_with_prices_including_tax():
+    # 107 includes VAT on 100: the service charge is 10% of 100, and its VAT (0.70) is added
+    _, totals = calculate([{'unit_price': '107', 'quantity': 1, 'taxes': VAT}], decimals=2, prices_include_tax=True,
+                          service_charge_rate=Decimal('10'))
+    assert (totals['service_charge'], totals['tax_amount'], totals['total_amount']) ==         (Decimal('10.00'), Decimal('7.70'), Decimal('117.70'))
+
+
+def test_service_charge_after_the_discount_and_not_on_fixed_taxes():
+    packing = {'key': 9, 'name': 'Packing', 'type': 'fixed', 'rate': None, 'amount': '20', 'fixed_basis': 'per_bill'}
+    _, totals = calculate([{'unit_price': '200', 'quantity': 1, 'taxes': VAT + [packing]}], decimals=2,
+                          discount_amount=Decimal('100'), service_charge_rate=Decimal('10'))
+    # (200 - 100) = 100; service 10; VAT 7.70; packing 20
+    assert (totals['service_charge'], totals['tax_amount'], totals['total_amount']) ==         (Decimal('10.00'), Decimal('27.70'), Decimal('137.70'))
+
+
+def test_orders_take_the_service_charge_from_the_settings(shop):
+    api, outlet, table, paneer, naan = shop
+    assert api.patch(f'{POS}/settings/', {'service_charge_rate': '10', 'service_charge_dine_in_only': True},
+                     format='json').status_code == 200
+    order = place(api, outlet, table, (paneer, 2, ''))
+    # 500 + 50 service; CGST and SGST 2.5% each of 550
+    assert (order['subtotal'], order['service_charge'], order['tax_amount'], order['total_amount']) ==         ('500.00', '50.00', '27.50', '578.00')  # 577.50 rounded to the rupee
+    assert order['service_charge_rate'] == '10.00'
+    takeaway = place(api, outlet, None, (naan, 1, ''))
+    assert takeaway['service_charge'] == '0.00'
+    # Changing the setting later doesn't change an open order
+    api.patch(f'{POS}/settings/', {'service_charge_rate': '5'}, format='json')
+    assert api.get(f"{POS}/orders/{order['id']}/").data['service_charge'] == '50.00'

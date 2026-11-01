@@ -197,7 +197,7 @@ export default function ImportRestaurantModal({ formId, onClose, onCreated }) {
 }
 
 function Preview({ preview }) {
-  const { business, outlets, taxes, people, payment_methods: methods, menu, problems, warnings } = preview;
+  const { business, outlets, taxes, service_charge: service, people, payment_methods: methods, menu, problems, warnings } = preview;
   const tables = outlets.reduce((n, o) => n + o.tables, 0);
   return (
     <>
@@ -254,6 +254,12 @@ function Preview({ preview }) {
               {!t.every_item && <Badge ml={2} colorScheme="orange">some items</Badge>}
             </Text>
           )) : <Text color="gray.500">None on the form</Text>}
+          {service && (
+            <Text mt={1}>
+              Service charge {service.rate}%, added on top and taxed
+              {service.dine_in_only && <Badge ml={2} colorScheme="blue">dine-in only</Badge>}
+            </Text>
+          )}
         </Box>
         <Box>
           <Text fontWeight="semibold" fontSize="md" mb={1}>Payment methods</Text>

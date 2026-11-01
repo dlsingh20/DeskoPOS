@@ -7,6 +7,9 @@ from core.models import MONEY, RATE, TenantModel, TimestampedModel, app_table
 class TenantSettings(TenantModel):
     """One row per client."""
     prices_include_tax = models.BooleanField(default=False)
+    # Added on top of the bill, before tax (orders.pricing); 0 = none
+    service_charge_rate = models.DecimalField(default=0, **RATE)
+    service_charge_dine_in_only = models.BooleanField(default=False)
     rounding_mode = models.CharField(max_length=8, default='nearest',
                                      choices=[(m, m) for m in ('none', 'nearest', 'up', 'down')])
     rounding_step = models.DecimalField(default=1, **MONEY)

@@ -54,19 +54,31 @@ def split_name(full):
     return (parts[0][:60] if parts else ''), (parts[1][:60] if len(parts) > 1 else '')
 
 
+def _is_service_charge(tax):
+    return 'service' in tax['name'].lower()
+
+
 def form_taxes(d):
     """
-    The taxes to create: exactly those on the form, plus the service charge from the billing
-    rules (dine-in only when the form says so). Never the country defaults.
+    The taxes to create: exactly those on the form, never the country defaults. A service charge
+    listed among them isn't a tax: it goes to the client settings (form_service_charge).
     """
-    taxes = [{**t, 'channels': []} for t in d['taxes'] if t.get('name') and t.get('rate') is not None]
-    percent = d['billing'].get('service_charge_percent')
-    listed = any('service' in t['name'].lower() for t in taxes)
-    if percent and not listed:
-        dine_in = d['billing'].get('service_charge_dine_in_only') is True
-        taxes.append({'name': 'Service charge', 'rate': percent, 'applies_to': None,
-                      'channels': ['dine_in'] if dine_in else []})
-    return taxes
+    return [{**t, 'channels': []} for t in d['taxes']
+            if t.get('name') and t.get('rate') is not None and not _is_service_charge(t)]
+
+
+def form_service_charge(d):
+    """
+    The service charge % from the billing rules, or from a "Service charge" line in the taxes;
+    None when there is none. It is added on top of the bill and taxed (orders.pricing).
+    """
+    rate = d['billing'].get('service_charge_percent')
+    if not rate:
+        rate = next((t['rate'] for t in d['taxes']
+                     if t.get('name') and t.get('rate') is not None and _is_service_charge(t)), None)
+    if not rate:
+        return None
+    return {'rate': rate, 'dine_in_only': d['billing'].get('service_charge_dine_in_only') is True}
 
 
 def is_general_tax(tax):
@@ -80,7 +92,7 @@ class Plan:
     def __init__(self, data, form):
         self.data, self.form = data, form
         self.problems, self.warnings = [], []
-        self.people, self.taxes, self.menu = [], [], None
+        self.people, self.taxes, self.menu, self.service_charge = [], [], None, None
         self.country = None
 
     def problem(self, message):
@@ -97,6 +109,7 @@ class Plan:
                          'cash_counters': len(o.get('cash_counters') or []) or 1} for o in d['outlets']],
             'taxes': [{'name': t['name'], 'rate': t.get('rate'), 'every_item': is_general_tax(t),
                        'dine_in_only': t.get('channels') == ['dine_in']} for t in self.taxes],
+            'service_charge': self.service_charge,
             'people': [{k: p[k] for k in ('name', 'role', 'login_id', 'generated', 'can_login')} for p in self.people],
             'payment_methods': self.payment_codes(),
             'menu': None if self.menu is None else {
@@ -246,6 +259,7 @@ def plan_import(body):
             plan.warnings.append(f'{outlet.get("name") or f"Outlet {i}"}: tables without a number are left out.')
 
     plan.taxes = form_taxes(d)
+    plan.service_charge = form_service_charge(d)
     if not plan.taxes:
         plan.warnings.append('No taxes on the form, so the restaurant starts without any. Add them in Settings if needed.')
     specific = [t['name'] for t in plan.taxes if not is_general_tax(t)]
@@ -285,6 +299,10 @@ def _settings(tenant, d, form):
         s.rounding_mode = billing['rounding']
     if billing.get('fiscal_year_start'):
         s.fiscal_year_start = int(billing['fiscal_year_start'])
+    service = form_service_charge(d)
+    if service:
+        s.service_charge_rate = Decimal(str(service['rate']))
+        s.service_charge_dine_in_only = service['dine_in_only']
     if billing.get('cashier_discount_limit') is not None:
         s.cashier_discount_limit = Decimal(str(billing['cashier_discount_limit']))
     prefix = re.sub(r'[^A-Za-z0-9-]', '', billing.get('invoice_prefix') or '')[:12]

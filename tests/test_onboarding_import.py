@@ -99,7 +99,8 @@ def test_preview_says_what_will_be_made_and_writes_nothing(submitted_form, platf
     warnings = ' '.join(r.data['warnings'])
     assert 'VAT apply only to some items' in warnings and 'service charge' not in warnings
     assert [(t['name'], t['rate'], t['dine_in_only']) for t in r.data['taxes']] == [
-        ('CGST', 2.5, False), ('SGST', 2.5, False), ('VAT', 20, False), ('Service charge', 5, False)]
+        ('CGST', 2.5, False), ('SGST', 2.5, False), ('VAT', 20, False)]
+    assert r.data['service_charge'] == {'rate': 5, 'dine_in_only': False}
     with tenancy.platform_scope():
         assert OnboardingForm.objects.get(id=submitted_form['id']).tenant_id is None
 
@@ -118,7 +119,7 @@ def test_create_restaurant_from_a_form(submitted_form, platform_api, mailoutbox,
     with tenancy.client_scope(tenant['id']):
         s = TenantSettings.objects.get()
         assert (s.prices_include_tax, s.rounding_mode, s.cashier_discount_limit) == (True, 'up', 5)
-        assert s.invoice_format == 'SG/{fy}/{seq:06}' and s.settings['onboarding']['service_charge_percent'] == 5
+        assert s.invoice_format == 'SG/{fy}/{seq:06}' and s.service_charge_rate == 5
         main, second = Outlet.objects.order_by('sort_order')
         assert (main.code, main.name, main.city, main.licence_number) == ('MAIN', 'Indiranagar', 'Bengaluru', '11223344556677')
         assert 'Karnataka' in main.address and str(main.day_close_time) == '05:00:00'
@@ -129,12 +130,12 @@ def test_create_restaurant_from_a_form(submitted_form, platform_api, mailoutbox,
         prints = PrintSettings.objects.get(outlet=main)
         assert prints.header['name'] == 'Spice Garden' and prints.header['taxId'] == '29ABCDE1234F1Z5'
         assert (prints.bill_format, prints.kot_copies, prints.footer) == ('thermal58', 2, 'Come again!')
-        assert list(Tax.objects.order_by('sequence').values_list('name', flat=True)) == ['CGST', 'SGST', 'VAT', 'Service charge']
+        assert list(Tax.objects.order_by('sequence').values_list('name', flat=True)) == ['CGST', 'SGST', 'VAT']
         active = set(PaymentMethod.objects.filter(is_active=True).values_list('code', flat=True))
         assert active == {'cash', 'upi', 'paytm'}
 
         starters = Category.objects.get(name='Starters')
-        assert sorted(t.tax.name for t in starters.tax_links.all()) == ['CGST', 'SGST', 'Service charge']  # not the liquor VAT
+        assert sorted(t.tax.name for t in starters.tax_links.all()) == ['CGST', 'SGST']  # not the liquor VAT
         assert MenuCategory.objects.filter(category=starters).count() == 2  # on both outlets' menus
         assert Product.objects.get(name='Dal Makhani').price == 1050
         assert Product.objects.count() == 4
@@ -191,13 +192,17 @@ def only_the_form_taxes(platform_api, taxes, billing):
                           format='json')
     assert r.status_code == 201, r.data
     with tenancy.client_scope(r.data['tenant']['id']):
-        return list(Tax.objects.order_by('sequence').values_list('name', 'rate', 'channels')), r.data['summary']
+        return list(Tax.objects.order_by('sequence').values_list('name', 'rate', 'channels')), {**r.data['summary'], 'tenant': r.data['tenant']['id']}
 
 
 def test_no_country_default_taxes_only_the_forms(platform_api):
-    taxes, _ = only_the_form_taxes(platform_api, [{'name': 'VAT', 'rate': 7}],
-                                   {'service_charge_percent': 10, 'service_charge_dine_in_only': True})
-    assert taxes == [('VAT', 7, []), ('Service charge', 10, ['dine_in'])]  # no CGST / SGST
+    taxes, summary = only_the_form_taxes(platform_api, [{'name': 'VAT', 'rate': 7}],
+                                         {'service_charge_percent': 10, 'service_charge_dine_in_only': True})
+    assert taxes == [('VAT', 7, [])]  # no CGST / SGST; the service charge is a setting, not a tax
+    assert summary['service_charge'] == {'rate': 10, 'dine_in_only': True}
+    with tenancy.client_scope(summary['tenant']):
+        s = TenantSettings.objects.get()
+        assert (s.service_charge_rate, s.service_charge_dine_in_only) == (10, True)
 
 
 def test_no_taxes_on_the_form_means_none(platform_api):
@@ -206,6 +211,7 @@ def test_no_taxes_on_the_form_means_none(platform_api):
     assert any('starts without any' in w for w in summary['warnings'])
 
 
-def test_service_charge_listed_as_a_tax_is_not_added_twice(platform_api):
-    taxes, _ = only_the_form_taxes(platform_api, [{'name': 'Service Charge', 'rate': 10}], {'service_charge_percent': 10})
-    assert [t[0] for t in taxes] == ['Service Charge']
+def test_service_charge_listed_as_a_tax_becomes_the_service_charge(platform_api):
+    taxes, summary = only_the_form_taxes(platform_api, [{'name': 'VAT', 'rate': 7}, {'name': 'Service Charge', 'rate': 10}], {})
+    assert [t[0] for t in taxes] == ['VAT']
+    assert summary['service_charge'] == {'rate': 10, 'dine_in_only': False}

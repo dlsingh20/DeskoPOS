@@ -6,7 +6,11 @@ Order calculation: one function for orders, settle, refunds and previews (DESIGN
 3. Each percentage tax = (line gross - line discount) x rate; taxes aren't charged on taxes.
 4. Fixed taxes: amount x quantity (per_unit) or once per bill (per_bill); discounts don't reduce them.
 5. When prices include tax, percentage taxes are taken out of the price instead of added.
-6. Each tax is rounded to the currency decimals; the total is rounded by the client's rule
+6. The service charge = (line price before tax - line discount) x the order's rate, always added on top.
+   Percentage taxes are charged on it too: 100 + 10% service = 110, + 7% VAT of 110 = 117.70.
+   With prices including tax the price is first taken back to before tax (107 -> 100), so the
+   bill is 107 + 10.00 service + 0.70 VAT on the service = 117.70 as well.
+7. Each tax is rounded to the currency decimals; the total is rounded by the client's rule
    and the difference shown as round_off.
 """
 from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
@@ -39,8 +43,16 @@ def _round_total(value, mode, step):
     return (value / step).quantize(Decimal(1), rounding=rounding) * step
 
 
+def service_charge_rate(settings_row, order_type):
+    """The service charge % a new order of this type gets (dine-in only when the client says so)."""
+    rate = settings_row.service_charge_rate or ZERO
+    if rate and settings_row.service_charge_dine_in_only and CHANNEL_FOR_TYPE.get(order_type) != 'dine_in':
+        return ZERO
+    return rate
+
+
 def calculate(lines, *, decimals, prices_include_tax=False, discount_amount=ZERO,
-              rounding_mode='none', rounding_step=ZERO):
+              rounding_mode='none', rounding_step=ZERO, service_charge_rate=ZERO):
     """
     lines: [{'unit_price', 'quantity', 'discountable', 'taxes': [snapshot dicts with 'key']}]
     Returns per-line results (same order) and the order totals. Pure: no database.
@@ -61,7 +73,8 @@ def calculate(lines, *, decimals, prices_include_tax=False, discount_amount=ZERO
             shares[i] = share
             given += share
 
-    results, seen_per_bill, tax_total, added_tax = [], set(), ZERO, ZERO
+    service_rate = Decimal(service_charge_rate or 0)
+    results, seen_per_bill, tax_total, added_tax, service_total = [], set(), ZERO, ZERO, ZERO
     for i, line in enumerate(lines):
         base = gross[i] - shares[i]
         percent = [t for t in line['taxes'] if t['type'] == 'percentage']
@@ -70,11 +83,21 @@ def calculate(lines, *, decimals, prices_include_tax=False, discount_amount=ZERO
             net = base * 100 / (100 + total_rate)
         else:
             net = base
+        service = net * service_rate / 100 if line['quantity'] else ZERO
+        service_total += service
         amounts = []
         for t in line['taxes']:
             if t['type'] == 'percentage':
-                amount = r(net * Decimal(t['rate']) / 100) if line['quantity'] else ZERO
-                if not prices_include_tax:
+                rate = Decimal(t['rate'])
+                if not line['quantity']:
+                    amount = ZERO
+                elif prices_include_tax:
+                    # The tax on the price is inside it; the tax on the service charge is added
+                    on_service = r(service * rate / 100)
+                    amount = r(net * rate / 100) + on_service
+                    added_tax += on_service
+                else:
+                    amount = r((net + service) * rate / 100)
                     added_tax += amount
             elif t['fixed_basis'] == 'per_unit':
                 amount = r(Decimal(t['amount']) * line['quantity'])
@@ -90,7 +113,9 @@ def calculate(lines, *, decimals, prices_include_tax=False, discount_amount=ZERO
         results.append({'gross': gross[i], 'discount': shares[i], 'tax_amounts': amounts,
                         'tax_amount': sum(amounts, ZERO)})
 
-    raw_total = subtotal - discount + added_tax
+    service_total = r(service_total)
+    raw_total = subtotal - discount + service_total + added_tax
     total = r(_round_total(raw_total, rounding_mode, Decimal(rounding_step or 0)))
-    return results, {'subtotal': subtotal, 'discount_amount': discount, 'tax_amount': tax_total,
+    return results, {'subtotal': subtotal, 'discount_amount': discount, 'service_charge': service_total,
+                     'tax_amount': tax_total,
                      'round_off': total - raw_total, 'total_amount': total}
