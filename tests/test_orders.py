@@ -290,3 +290,12 @@ def test_orders_take_the_service_charge_from_the_settings(shop):
     # Changing the setting later doesn't change an open order
     api.patch(f'{POS}/settings/', {'service_charge_rate': '5'}, format='json')
     assert api.get(f"{POS}/orders/{order['id']}/").data['service_charge'] == '50.00'
+
+
+def test_only_an_administrator_changes_billing_settings(shop, cashier, mailoutbox):
+    manager = sign_in('sg_mgr', 'Manager-pass-1', mailoutbox)[0]
+    for api in (manager, cashier):
+        r = api.patch(f'{POS}/settings/', {'service_charge_rate': '0'}, format='json')
+        assert r.status_code == 403
+        assert api.get(f'{POS}/settings/').status_code == 200  # everyone reads them
+    assert shop[0].patch(f'{POS}/settings/', {'service_charge_rate': '0'}, format='json').data['service_charge_rate'] == '0.0000'

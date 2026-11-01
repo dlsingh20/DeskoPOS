@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from accounts import audit
-from core.exceptions import ApiError, Conflict
+from core.exceptions import ApiError, Conflict, PermissionRequired
 from core.permissions import read_or_require
 
 from .models import Outlet, PrintSettings, TenantSettings
@@ -142,6 +142,8 @@ def client_settings(request):
     """Client name, currency and locale for the app (replaces the hotel's /my-hotel/), plus POS settings."""
     settings_row = TenantSettings.objects.get()
     if request.method == 'PATCH':
+        if request.user.role.key != 'administrator':
+            raise PermissionRequired('settings.manage', detail='Only an Administrator can change billing settings.')
         body = ClientSettingsSerializer(settings_row, data=request.data, partial=True)
         body.is_valid(raise_exception=True)
         body.save()

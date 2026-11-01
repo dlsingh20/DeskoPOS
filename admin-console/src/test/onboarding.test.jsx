@@ -103,6 +103,8 @@ describe('onboarding forms', () => {
       people: [{ name: 'Ravi Kumar', role: 'administrator', login_id: 'ravi.admin', generated: false, can_login: true },
         { name: 'Vikram', role: 'waiter', login_id: 'vikram', generated: true, can_login: false }],
       payment_methods: ['cash', 'upi'],
+      service_charge: { rate: 10, dine_in_only: true },
+      billing: { prices_include_tax: true, rounding: 'nearest', cashier_discount_limit: 10 },
       menu: { file: 'menu.xlsx', items: 42, categories: 6, problems: [], error: null },
       problems: [], warnings: ['VAT apply only to some items.'],
     };
@@ -123,6 +125,8 @@ describe('onboarding forms', () => {
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(screen.getByText('made up')).toBeInTheDocument();
     expect(screen.getByText('VAT apply only to some items.')).toBeInTheDocument();
+    expect(screen.getByText(/service charge: 10%, added on top and taxed/i)).toBeInTheDocument();
+    expect(screen.getByText('Menu prices include tax: yes')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^create restaurant$/i }));
     expect(await screen.findByText('Temp-Pass-123')).toBeInTheDocument();
     expect(screen.getByText(/client id 105/i)).toBeInTheDocument();

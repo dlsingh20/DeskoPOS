@@ -196,8 +196,10 @@ export default function ImportRestaurantModal({ formId, onClose, onCreated }) {
   );
 }
 
+const ROUNDING_LABEL = { nearest: 'to the nearest whole amount', up: 'always up', down: 'always down', none: 'no rounding' };
+
 function Preview({ preview }) {
-  const { business, outlets, taxes, service_charge: service, people, payment_methods: methods, menu, problems, warnings } = preview;
+  const { business, outlets, taxes, service_charge: service, billing, people, payment_methods: methods, menu, problems, warnings } = preview;
   const tables = outlets.reduce((n, o) => n + o.tables, 0);
   return (
     <>
@@ -254,18 +256,26 @@ function Preview({ preview }) {
               {!t.every_item && <Badge ml={2} colorScheme="orange">some items</Badge>}
             </Text>
           )) : <Text color="gray.500">None on the form</Text>}
-          {service && (
-            <Text mt={1}>
-              Service charge {service.rate}%, added on top and taxed
-              {service.dine_in_only && <Badge ml={2} colorScheme="blue">dine-in only</Badge>}
-            </Text>
-          )}
         </Box>
         <Box>
           <Text fontWeight="semibold" fontSize="md" mb={1}>Payment methods</Text>
           <Text>{methods.join(', ')}</Text>
         </Box>
       </SimpleGrid>
+
+      {billing && (
+        <Box fontSize="sm" mb={4}>
+          <Text fontWeight="semibold" fontSize="md" mb={1}>Billing</Text>
+          <Text>
+            Service charge: {service ? `${service.rate}%, added on top and taxed` : 'none'}
+            {service?.dine_in_only && <Badge ml={2} colorScheme="blue">dine-in only</Badge>}
+          </Text>
+          <Text>Menu prices include tax: {billing.prices_include_tax ? 'yes' : 'no'}</Text>
+          <Text>Round the bill total: {ROUNDING_LABEL[billing.rounding] || billing.rounding}</Text>
+          <Text>Cashier discount limit: {billing.cashier_discount_limit}%</Text>
+          <Text color="gray.500" mt={1}>The client's Administrator can change these later on the POS Billing page.</Text>
+        </Box>
+      )}
 
       <Text fontWeight="semibold" mb={1}>Menu</Text>
       {menu?.error ? (

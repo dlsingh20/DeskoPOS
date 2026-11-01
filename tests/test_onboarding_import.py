@@ -101,6 +101,7 @@ def test_preview_says_what_will_be_made_and_writes_nothing(submitted_form, platf
     assert [(t['name'], t['rate'], t['dine_in_only']) for t in r.data['taxes']] == [
         ('CGST', 2.5, False), ('SGST', 2.5, False), ('VAT', 20, False)]
     assert r.data['service_charge'] == {'rate': 5, 'dine_in_only': False}
+    assert r.data['billing'] == {'prices_include_tax': True, 'rounding': 'up', 'cashier_discount_limit': 5}
     with tenancy.platform_scope():
         assert OnboardingForm.objects.get(id=submitted_form['id']).tenant_id is None
 

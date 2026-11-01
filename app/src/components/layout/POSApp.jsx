@@ -22,6 +22,7 @@ import FineDineDashboard from '../fineDine/FineDineDashboard';
 import LiveOrdersView from '../fineDine/LiveOrdersView';
 import HistoryView from '../history/HistoryView';
 import PrintSettingsView from '../settings/PrintSettingsView';
+import BillingSettingsView from '../settings/BillingSettingsView';
 import UsersView from '../users/UsersView';
 import ReportsView from '../reporting/ReportsView';
 import { RequirePermission } from '../../context/AccessContext';
@@ -169,6 +170,7 @@ const POSApp = ({ onLogout }) => {
             <Route path="/settings/printing" element={<RequirePermission permission="settings.manage"><PrintSettingsView /></RequirePermission>} />
 
             {/* Settings - cash counters and shifts (Administrators edit counters; Managers close shifts) */}
+            <Route path="/settings/billing" element={<RequirePermission permission="users.manage"><BillingSettingsView /></RequirePermission>} />
             <Route path="/settings/cash-counters" element={<RequirePermission permission="settings.manage"><CashCountersView /></RequirePermission>} />
 
             {/* History - Sales History and Pending Bills */}

@@ -98,6 +98,14 @@ class Plan:
     def problem(self, message):
         self.problems.append(message)
 
+    def billing(self):
+        """The Billing settings the client gets (the Administrator can change them later); blanks keep the defaults."""
+        billing = self.data['billing']
+        limit = billing.get('cashier_discount_limit')
+        return {'prices_include_tax': billing.get('prices_include_tax') is True,
+                'rounding': billing.get('rounding') or 'nearest',
+                'cashier_discount_limit': limit if limit is not None else 10}
+
     def summary(self):
         d = self.data
         return {
@@ -110,6 +118,7 @@ class Plan:
             'taxes': [{'name': t['name'], 'rate': t.get('rate'), 'every_item': is_general_tax(t),
                        'dine_in_only': t.get('channels') == ['dine_in']} for t in self.taxes],
             'service_charge': self.service_charge,
+            'billing': self.billing(),
             'people': [{k: p[k] for k in ('name', 'role', 'login_id', 'generated', 'can_login')} for p in self.people],
             'payment_methods': self.payment_codes(),
             'menu': None if self.menu is None else {
