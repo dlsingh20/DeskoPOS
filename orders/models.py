@@ -58,6 +58,7 @@ class Order(TenantModel, TimestampedModel):
                                              related_name='+')
     tax_amount = models.DecimalField(default=0, **MONEY)
     service_charge = models.DecimalField(default=0, **MONEY)
+    service_charge_rate = models.DecimalField(default=0, **RATE)  # from the client settings when the order opened
     round_off = models.DecimalField(default=0, **MONEY)
     total_amount = models.DecimalField(default=0, **MONEY)
     amount_paid = models.DecimalField(default=0, **MONEY)

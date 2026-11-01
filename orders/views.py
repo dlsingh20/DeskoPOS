@@ -19,6 +19,7 @@ from core.exceptions import ApiError, Conflict, PermissionRequired
 from core.money import money_str
 from core.pagination import StandardPagination
 from floor.models import DiningTable
+from outlets.models import TenantSettings
 from outlets.services import outlets_for
 from outlets.views import outlet_from_param
 from payments.services import payment_payload, refund_payload
@@ -142,6 +143,7 @@ def order_payload(order, request):
         'tax_amount': m(order.tax_amount),
         'tax_breakdown': tax_breakdown(order, decimals),
         'service_charge': m(order.service_charge),
+        'service_charge_rate': f'{order.service_charge_rate:.2f}',
         'round_off': m(order.round_off),
         'total_amount': m(order.total_amount),
         'amount_paid': m(order.amount_paid),
@@ -325,6 +327,7 @@ class OrderList(generics.GenericAPIView):
         day = business_date(outlet, request.tenant)
         order = Order.objects.create(
             outlet=outlet, table=table, type=data['type'], business_date=day,
+            service_charge_rate=pricing.service_charge_rate(TenantSettings.objects.get(), data['type']),
             order_number=new_order_number(outlet, day), guest_count=data.get('guest_count'),
             client_ref=data.get('client_ref'), created_by=request.user,
             **{f: (data.get(f) or '').strip() for f in GUEST_TEXT_FIELDS})
@@ -638,6 +641,7 @@ def unmerge_table(request, pk):
         day = business_date(order.outlet, request.tenant)
         new = Order.objects.create(
             outlet=order.outlet, table=table, type=order.type, business_date=day, order_number=new_order_number(order.outlet, day),
+            service_charge_rate=order.service_charge_rate,
             status=order.status if sent and order.status != 'pending' else ('confirmed' if sent else 'pending'),
             server=order.server, created_by=request.user)
         Kot.objects.filter(order=order, table=table).update(order=new, table=None)

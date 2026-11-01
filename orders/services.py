@@ -79,7 +79,8 @@ def recalculate(order, tenant):
         discount = eligible * order.discount_percent / 100
     results, totals = pricing.calculate(
         lines, decimals=decimals, prices_include_tax=settings_row.prices_include_tax, discount_amount=discount,
-        rounding_mode=settings_row.rounding_mode, rounding_step=settings_row.rounding_step)
+        rounding_mode=settings_row.rounding_mode, rounding_step=settings_row.rounding_step,
+        service_charge_rate=order.service_charge_rate)
 
     for item, result in zip(items, results):
         item.total_price = result['gross']

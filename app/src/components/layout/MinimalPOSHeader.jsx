@@ -53,6 +53,7 @@ import {
   Wallet,
   Boxes,
   Monitor,
+  Receipt,
 } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
 import RestaurantDropdown from '../restaurant/RestaurantDropdown';
@@ -190,6 +191,13 @@ const MinimalPOSHeader = ({ onLogout }) => {
       icon: Printer,
       isActive: false,
       permission: 'settings.manage',
+    },
+    {
+      path: '/settings/billing',
+      label: 'Billing',
+      icon: Receipt,
+      isActive: false,
+      permission: 'users.manage', // Administrators only
     },
     {
       path: '/settings/cash-counters',

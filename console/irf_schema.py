@@ -91,7 +91,7 @@ SECTIONS = [
     {'key': 'billing', 'title': 'Billing rules', 'fields': [
         f('prices_include_tax', 'Do menu prices already include tax?', 'yesno', required=True),
         f('rounding', 'Round the bill total', 'select',
-          options=[('nearest', 'To the nearest rupee'), ('up', 'Always up'), ('down', 'Always down'),
+          options=[('nearest', 'To the nearest whole amount'), ('up', 'Always up'), ('down', 'Always down'),
                    ('none', 'No rounding')]),
         f('service_charge_percent', 'Service charge %', 'number', min=0, max=100,
           help='Leave blank if you do not charge one.'),

@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from accounts import audit
-from core.exceptions import ApiError, Conflict
+from core.exceptions import ApiError, Conflict, PermissionRequired
 from core.permissions import read_or_require
 
 from .models import Outlet, PrintSettings, TenantSettings
@@ -131,7 +131,9 @@ def outlet_from_param(request, name='restaurant_id', required=True):
 class ClientSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TenantSettings
-        fields = ['prices_include_tax', 'rounding_mode', 'rounding_step', 'cashier_discount_limit']
+        fields = ['prices_include_tax', 'rounding_mode', 'rounding_step', 'cashier_discount_limit',
+                  'service_charge_rate', 'service_charge_dine_in_only']
+        extra_kwargs = {'service_charge_rate': {'min_value': 0, 'max_value': 100}}
 
 
 @api_view(['GET', 'PATCH'])
@@ -140,6 +142,8 @@ def client_settings(request):
     """Client name, currency and locale for the app (replaces the hotel's /my-hotel/), plus POS settings."""
     settings_row = TenantSettings.objects.get()
     if request.method == 'PATCH':
+        if request.user.role.key != 'administrator':
+            raise PermissionRequired('settings.manage', detail='Only an Administrator can change billing settings.')
         body = ClientSettingsSerializer(settings_row, data=request.data, partial=True)
         body.is_valid(raise_exception=True)
         body.save()
