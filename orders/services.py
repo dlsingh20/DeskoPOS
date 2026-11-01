@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from core.timezones import zone
 from outlets.models import TenantSettings
 from outlets.services import outlets_for
 from payments.models import Shift
@@ -15,7 +15,7 @@ from .models import OPEN_STATUSES, NumberSequence, Order, OrderEvent
 
 def business_date(outlet, tenant, now=None):
     """The day an order counts toward: before the outlet's day close (04:00), it's still yesterday."""
-    tz = ZoneInfo(outlet.timezone or tenant.get('timezone') or 'UTC')
+    tz = zone(outlet.timezone or tenant.get('timezone') or 'UTC')
     local = (now or timezone.now()).astimezone(tz)
     close = outlet.day_close_time
     if isinstance(close, str):
@@ -32,7 +32,7 @@ def history_start(request):
     if request.user.has_perm('history.full'):
         return None
     now = timezone.now()
-    today = now.astimezone(ZoneInfo(request.tenant.get('timezone') or 'UTC')).replace(
+    today = now.astimezone(zone(request.tenant.get('timezone') or 'UTC')).replace(
         hour=0, minute=0, second=0, microsecond=0)
     last_close = (Shift.objects.filter(status='closed', outlet__in=outlets_for(request.user), closed_at__lte=now)
                   .order_by('-closed_at').values_list('closed_at', flat=True).first())

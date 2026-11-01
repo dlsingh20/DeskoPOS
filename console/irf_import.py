@@ -18,6 +18,7 @@ from accounts.models import Role, User, UserOutlet
 from catalogue.models import Category, CategoryTax, Menu, MenuCategory, Product
 from core import tenancy
 from core.exceptions import ApiError
+from core.timezones import DAY_CLOSE_HELP, canonical_timezone
 from floor.models import DiningTable
 from floor.views import new_qr_secret
 from outlets.models import CashCounter, Outlet, PrintSettings, TenantSettings
@@ -266,6 +267,13 @@ def plan_import(body):
             plan.problem(f'{outlet.get("name") or f"Outlet {i}"}: table {", ".join(repeated)} is listed twice.')
         if any(not n for n in numbers):
             plan.warnings.append(f'{outlet.get("name") or f"Outlet {i}"}: tables without a number are left out.')
+        if (outlet.get('day_close_time') or '') >= '12:00':
+            plan.problem(f'{outlet.get("name") or f"Outlet {i}"}: business day ends at {outlet["day_close_time"]}. '
+                         f'{DAY_CLOSE_HELP}')
+    tz = d['business'].get('timezone')
+    if tz and not canonical_timezone(tz):
+        plan.problem(f'Time zone "{tz}" is not known. Use a name such as Asia/Kolkata, or leave it blank for the '
+                     "country's time zone.")
 
     plan.taxes = form_taxes(d)
     plan.service_charge = form_service_charge(d)

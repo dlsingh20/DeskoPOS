@@ -11,6 +11,8 @@ file (uploads, stored apart from the JSON).
 """
 import re
 
+from core.timezones import DAY_CLOSE_HELP, canonical_timezone
+
 SCHEMA_ID = 'deskopos.irf/1'
 
 LOGIN_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{2,59}$')
@@ -228,6 +230,9 @@ def clean(data, options):
             out[section['key']] = _clean_value({**section, 'type': 'list'}, data.get(section['key']), options) or []
         else:
             out[section['key']] = _clean_fields(section['fields'], data.get(section['key']), options)
+    # Spelt the way the servers need it ('asia/kolkata' -> 'Asia/Kolkata'); unknown names stay for problems()
+    tz = out['business'].get('timezone')
+    out['business']['timezone'] = canonical_timezone(tz) or tz
     return out
 
 
@@ -260,6 +265,10 @@ def problems(data, file_counts):
                 need(key_path, label, 'Not a valid email address')
             elif fld['key'] == 'login_id' and value and not LOGIN_ID_RE.match(value):
                 need(key_path, label, LOGIN_ID_HELP)
+            elif fld['key'] == 'timezone' and value and not canonical_timezone(value):
+                need(key_path, label, 'Not a known time zone. Use a name such as Asia/Kolkata, or leave it blank')
+            elif fld['key'] == 'day_close_time' and value and value >= '12:00':
+                need(key_path, label, DAY_CLOSE_HELP)
             if fld['type'] == 'list':
                 for i, row in enumerate(value or []):
                     check_fields(fld['fields'], row, f'{key_path}.{i}', f'{prefix} · {fld["item"]} {i + 1}')
