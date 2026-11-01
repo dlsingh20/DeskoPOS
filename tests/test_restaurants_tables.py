@@ -125,3 +125,24 @@ def test_another_clients_tables_are_invisible(admin, make_client, mailoutbox):
     r = other.post(f'{POS}/tables/', {'restaurant': outlet['id'], 'table_number': '99'}, format='json')
     assert r.status_code == 400 and 'restaurant' in r.data['fields']
 
+
+
+def test_day_close_must_be_early_morning(admin):
+    _, api, outlet = admin
+    r = api.patch(f"{POS}/restaurants/{outlet['id']}/", {'day_close_time': '23:00'}, format='json')
+    assert r.status_code == 400 and 'early-morning' in str(r.data)
+    assert api.patch(f"{POS}/restaurants/{outlet['id']}/", {'day_close_time': '05:00'}, format='json').status_code == 200
+
+
+def test_business_date_forgives_the_time_zone_spelling():
+    from datetime import datetime, time, timezone as tz
+
+    from orders.services import business_date
+
+    class Outlet:
+        timezone = None
+        day_close_time = time(4)
+
+    # 20:00 UTC = 01:30 next day in Kolkata, before the 04:00 close: still the 1st
+    now = datetime(2026, 11, 1, 20, 0, tzinfo=tz.utc)
+    assert str(business_date(Outlet(), {'timezone': 'asia/kolkata'}, now)) == '2026-11-01'

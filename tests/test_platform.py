@@ -187,3 +187,15 @@ def test_platform_login_without_authenticator_code_when_switched_off(owner, sett
     assert r.status_code == 200 and r.data['access']
     r = APIClient().post('/api/platform/auth/login/', {'email': owner.email, 'password': 'wrong-password'}, format='json')
     assert r.status_code == 401
+
+
+def test_time_zone_is_checked_and_spelt_correctly(make_client, platform_api):
+    body = {'name': 'Zone Cafe', 'country': 'IN', 'outlet_name': 'Zone Cafe', 'admin_login_id': 'zone_admin',
+            'admin_password': 'Zone-pass-1234', 'admin_email': 'a@zone.example'}
+    r = platform_api.post('/api/platform/tenants/', {**body, 'timezone': 'Asia/Nowhere'}, format='json')
+    assert r.status_code == 400 and 'timezone' in r.data.get('fields', r.data)
+    r = platform_api.post('/api/platform/tenants/', {**body, 'timezone': 'asia/kolkata'}, format='json')
+    assert r.status_code == 201, r.data
+    assert r.data['timezone'] == 'Asia/Kolkata'
+    r = platform_api.patch(f"/api/platform/tenants/{r.data['id']}/", {'timezone': 'asia/bangkok'}, format='json')
+    assert r.status_code == 200 and r.data['timezone'] == 'Asia/Bangkok'

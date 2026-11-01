@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from accounts import audit
 from core.exceptions import ApiError, Conflict, PermissionRequired
 from core.permissions import read_or_require
+from core.timezones import DAY_CLOSE_HELP
 
 from .models import Outlet, PrintSettings, TenantSettings
 from .services import create_outlet, next_outlet_code, outlets_for
@@ -30,6 +31,11 @@ class RestaurantSerializer(serializers.ModelSerializer):
 
     def get_location(self, outlet):
         return ', '.join(p for p in (outlet.address, outlet.city) if p)
+
+    def validate_day_close_time(self, value):
+        if value and value.hour >= 12:
+            raise serializers.ValidationError(DAY_CLOSE_HELP)
+        return value
 
     def validate_name(self, value):
         value = value.strip()

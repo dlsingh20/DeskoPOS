@@ -216,3 +216,40 @@ def test_service_charge_listed_as_a_tax_becomes_the_service_charge(platform_api)
     taxes, summary = only_the_form_taxes(platform_api, [{'name': 'VAT', 'rate': 7}, {'name': 'Service Charge', 'rate': 10}], {})
     assert [t[0] for t in taxes] == ['VAT']
     assert summary['service_charge'] == {'rate': 10, 'dine_in_only': False}
+
+
+# ---- Time zone and day close (case-sensitive on the Linux servers) ----
+
+def preview_of(platform_api, business=None, outlet=None):
+    data = {**ANSWERS, 'business': {**ANSWERS['business'], **(business or {})},
+            'outlets': [{**ANSWERS['outlets'][0], **(outlet or {})}]}
+    r = platform_api.post('/api/platform/onboarding/import/preview/',
+                          {'payload': {'schema': 'deskopos.irf/1', 'data': data}}, format='json')
+    assert r.status_code == 200, r.data
+    return r.data, data
+
+
+def test_time_zone_spelling_is_corrected(platform_api):
+    preview, data = preview_of(platform_api, business={'timezone': 'asia/KOLKATA'})
+    assert preview['problems'] == []
+    r = platform_api.post('/api/platform/onboarding/import/', {'payload': {'schema': 'deskopos.irf/1', 'data': data}},
+                          format='json')
+    assert r.status_code == 201, r.data
+    assert platform_api.get(f"/api/platform/tenants/{r.data['tenant']['id']}/").data['timezone'] == 'Asia/Kolkata'
+
+
+def test_unknown_time_zone_and_evening_day_close_stop_the_import(platform_api):
+    preview, _ = preview_of(platform_api, business={'timezone': 'India/Delhi'}, outlet={'day_close_time': '23:00'})
+    problems = ' '.join(preview['problems'])
+    assert 'Time zone "India/Delhi" is not known' in problems
+    assert 'business day ends at 23:00' in problems and 'early-morning' in problems
+
+
+def test_form_flags_the_time_zone_and_day_close():
+    from console import irf_schema
+    data = irf_schema.clean({**ANSWERS, 'business': {**ANSWERS['business'], 'timezone': 'asia/bangkok'}}, {})
+    assert data['business']['timezone'] == 'Asia/Bangkok'
+    bad = irf_schema.clean({**ANSWERS, 'business': {**ANSWERS['business'], 'timezone': 'Mars/Base'},
+                            'outlets': [{**ANSWERS['outlets'][0], 'day_close_time': '22:30'}]}, {})
+    paths = {p['path'] for p in irf_schema.problems(bad, {'menu.files': 1})}
+    assert {'business.timezone', 'outlets.0.day_close_time'} <= paths

@@ -1,9 +1,12 @@
 from rest_framework import serializers
 
 from accounts.models import User
+from core.timezones import canonical_timezone
 from outlets.models import Outlet
 
 from .models import Country, Plan, PlatformAuditLog, Tenant, TenantStatusHistory
+
+TIMEZONE_HELP = 'Not a known time zone. Use a name such as Asia/Kolkata or Asia/Bangkok.'
 
 LOGIN_ID_RE = r'^[A-Za-z0-9][A-Za-z0-9._-]{2,59}$'
 LOGIN_ID_HELP = '3-60 characters: letters, numbers, dot, dash or underscore.'
@@ -36,6 +39,14 @@ class TenantSerializer(serializers.ModelSerializer):
                   'suspended_reason', 'closed_at', 'created_at', 'outlets', 'users']
         read_only_fields = ['id', 'status', 'activated_at', 'suspended_at', 'suspended_reason', 'closed_at', 'created_at']
 
+    def validate_timezone(self, value):
+        if not value:
+            return value
+        canonical = canonical_timezone(value)
+        if canonical is None:
+            raise serializers.ValidationError(TIMEZONE_HELP)
+        return canonical
+
     # Counted as pos_platform, which can see every client's rows
     def get_outlets(self, tenant):
         return Outlet.objects.filter(tenant_id=tenant.id).count()
@@ -61,6 +72,14 @@ class TenantCreateSerializer(serializers.Serializer):
     contact_name = serializers.CharField(required=False, allow_blank=True)
     contact_email = serializers.EmailField(required=False, allow_blank=True)
     contact_phone = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_timezone(self, value):
+        if not value:
+            return value
+        canonical = canonical_timezone(value)
+        if canonical is None:
+            raise serializers.ValidationError(TIMEZONE_HELP)
+        return canonical
 
     def validate_login_prefix(self, value):
         if value and Tenant.objects.filter(login_prefix=value).exists():
