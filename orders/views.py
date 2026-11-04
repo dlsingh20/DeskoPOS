@@ -80,6 +80,7 @@ def item_payload(item, decimals, order_table=None):
                   for t in item.taxes.all()],
         'special_instructions': item.special_instructions,
         'status': item.status,
+        'source': item.source,
         'kot_number': item.kot.number if item.kot_id else None,
         'kot_sent_at': when(item.kot.sent_at) if item.kot_id else None,
         'created_at': when(item.created_at),

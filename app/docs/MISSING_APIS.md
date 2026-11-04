@@ -81,11 +81,11 @@ Status checked against the live API on 19 Oct 2026 (cash counters on 20 Oct): **
 | 49 | Not in API yet | P2 | New endpoint | GET | `/api/pos/api/menu-items/{id}/history/` | Product change history |
 | 50 | Not in API yet | P2 | Change to existing | DELETE | `/api/pos/api/menu-items/{id}/` | Safe delete and archive |
 | 51 | Not in API yet | P1 | Rule for all endpoints | ALL | `/api/pos/api/menu-items/, /menu-categories/, /taxes/, /tax-profiles/` | Only authorised roles change products and taxes |
-| 52 | Not in API yet | P1 | Change to existing | GET | `/api/pos/api/orders/` | Mark orders and items that came from a table QR |
-| 53 | Not in API yet | P1 | Change to existing | POST | `/api/pos/public/orders/` | Guest places an order from the table QR |
-| 54 | Not in API yet | P2 | New endpoint | PUT | `/api/pos/api/restaurants/{id}/qr-ordering/` | QR ordering settings (restaurant and table) |
-| 55 | Not in API yet | P2 | New endpoint | POST | `/api/pos/api/orders/{id}/qr/accept/` | Accept or reject QR items (accept mode) |
-| 56 | Not in API yet | P2 | Change to existing | POST | `/api/pos/api/tables/{id}/generate_qr_code/` | Table QR code: secret code and ordering link |
+| 52 | Done | P1 | Change to existing | GET | `/api/pos/api/orders/` | Mark orders and items that came from a table QR (`source: qr`) |
+| 53 | Done | P1 | New endpoint | GET, POST | `/api/guest/tables/{code}/`, `/api/guest/tables/{code}/orders/` | Guest menu and order from the table QR (page: `/order/{code}`) |
+| 54 | Done | P2 | New endpoint | GET, PUT | `/api/pos/api/restaurants/{id}/qr-ordering/` | QR ordering mode per restaurant (`auto` / `accept`) |
+| 55 | Not needed | P2 | New endpoint | POST | `/api/pos/api/orders/{id}/qr/accept/` | Accept or reject QR items: the app sends the KOT or removes the items |
+| 56 | Done | P2 | Change to existing | POST | `/api/pos/api/tables/{id}/generate_qr_code/` | Table QR code: secret code and ordering link |
 | 57 | Not in API yet | P1 | New endpoint | GET | `https://guest.staydesko.com/ordering/table` | Guest ordering page (guest app) |
 | 58 | Not in API yet | P1 | Change to existing | POST | `/api/pos/api/orders/{id}/settle/` | Link POS payments to the cashier's shift |
 | 59 | Behaviour to confirm | P1 | Change to existing | POST | `/api/accounting/cash-register/open/` | Open and close rules for cash counter shifts |

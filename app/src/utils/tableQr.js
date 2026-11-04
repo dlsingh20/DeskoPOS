@@ -1,17 +1,17 @@
 /**
  * Table QR codes: the ordering link each table's QR encodes, and printable card layouts.
  *
- * The guest ordering page lives in a separate guest app (REACT_APP_GUEST_APP_URL). DeskoPOS has none
- * yet, so QR ordering stays hidden until that address is set. The link uses the server's
- * table.qr_code_url when it is an ordering link; otherwise it is built from the guest app URL plus the
- * table's QR code (a per-table secret, so changing a table number in the link does not work once the
- * guest app validates the code). Regenerating a table's QR invalidates printed copies.
+ * The guest ordering page is part of this app: /order/<table's QR code> (components/guest). The code
+ * is a per-table secret the server checks, so changing anything in the link does not work, and a new
+ * QR code makes printed copies stop working. REACT_APP_GUEST_APP_URL can point the links elsewhere;
+ * by default they use this app's own address.
  */
 import { escapeHtml } from './printTemplates';
 
-export const GUEST_APP_URL = (process.env.REACT_APP_GUEST_APP_URL || '').replace(/\/+$/, '');
+export const GUEST_APP_URL = (process.env.REACT_APP_GUEST_APP_URL
+  || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/+$/, '');
 
-/** Table QR codes for guest ordering are shown only when a guest app is set up */
+/** Table QR codes for guest ordering */
 export const QR_ORDERING = !!GUEST_APP_URL;
 
 const IMAGE_URL = /\.(png|jpe?g|gif|svg|webp)(\?|$)/i;
@@ -31,12 +31,12 @@ export const getTableQrCode = (table) => {
 export const buildTableOrderingUrl = (table, { restaurantId, hotelId, baseUrl = GUEST_APP_URL } = {}) => {
   const serverUrl = String(table?.qr_code_url || '').trim();
   if (/^https?:\/\//i.test(serverUrl) && !IMAGE_URL.test(serverUrl)) return serverUrl;
+  const code = getTableQrCode(table);
+  if (code) return `${baseUrl}/order/${encodeURIComponent(code)}`;
   const params = new URLSearchParams();
   if (hotelId) params.set('hotel', hotelId);
   params.set('restaurant', restaurantId ?? table?.restaurant ?? '');
   params.set('table', table?.id ?? '');
-  const code = getTableQrCode(table);
-  if (code) params.set('code', code);
   params.set('source', 'qr');
   return `${baseUrl}/ordering/table?${params.toString()}`;
 };

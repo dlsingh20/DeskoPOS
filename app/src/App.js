@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { ChakraProvider, Spinner, Box, Text, VStack } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import theme from './theme';
@@ -9,7 +9,25 @@ import POSApp from './components/layout/POSApp';
 import POSLogin from './components/auth/POSLogin';
 import ApiClient from './services/ApiClient';
 
+// The page a table's QR code opens: for guests, so no sign-in (and not part of the POS bundle)
+const GuestOrderPage = lazy(() => import('./components/guest/GuestOrderPage'));
+const GUEST_PATH = /^\/order\/([^/?#]+)\/?$/;
+
 function App() {
+  const guestCode = window.location.pathname.match(GUEST_PATH)?.[1];
+  if (guestCode) {
+    return (
+      <ChakraProvider theme={theme}>
+        <Suspense fallback={<Box minH="100vh" display="flex" alignItems="center" justifyContent="center"><Spinner size="lg" /></Box>}>
+          <GuestOrderPage code={decodeURIComponent(guestCode)} />
+        </Suspense>
+      </ChakraProvider>
+    );
+  }
+  return <StaffApp />;
+}
+
+function StaffApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 

@@ -115,7 +115,7 @@ describe('ApiClient in DeskoPOS mode', () => {
 describe('shared print settings', () => {
   const { defaultPrintSettings, fromServerPrintSettings, toServerPrintSettings } = require('./PrintSettingsService');
 
-  test('round-trip through the server body keeps the settings and this device\'s QR options', () => {
+  test('round-trip through the server body keeps the settings; the QR mode is the restaurant\'s', () => {
     const local = { ...defaultPrintSettings('IN'), qrOrders: { mode: 'accept', handleOnThisDevice: true, sound: false } };
     const edited = {
       ...local,
@@ -125,8 +125,11 @@ describe('shared print settings', () => {
     };
     const body = toServerPrintSettings(edited);
     expect(body).toMatchObject({ bill_format: 'thermal58', kot_copies: 2, header: { tax_id: '29ABCDE1234F1Z5', tax_id_label: 'GSTIN' } });
-    expect(body.qr_orders_mode).toBeUndefined();
+    expect(body.qr_orders_mode).toBe('accept');
     expect(fromServerPrintSettings({ ...body, saved: true }, local)).toEqual(edited);
+    // The device keeps which device prints and the sound; the mode comes from the restaurant
+    expect(fromServerPrintSettings({ ...body, qr_orders_mode: 'auto' }, local).qrOrders)
+      .toEqual({ mode: 'auto', handleOnThisDevice: true, sound: false });
   });
 
   test('a server body without tax labels keeps the device\'s labels', () => {

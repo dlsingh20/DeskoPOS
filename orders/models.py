@@ -138,6 +138,7 @@ class OrderItem(TenantModel, TimestampedModel):
     special_instructions = models.TextField(blank=True, default='')  # KOT only, never on the bill
     status = models.CharField(max_length=10, default='pending', choices=[(s, s) for s in STATUSES])
     discountable = models.BooleanField(default=True)
+    source = models.CharField(max_length=12, default='pos')  # pos | qr (a guest ordered it from the table's QR code)
     kot = models.ForeignKey(Kot, on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
     # The merged table this line was ordered from; empty = the order's own table
     table = models.ForeignKey('floor.DiningTable', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
