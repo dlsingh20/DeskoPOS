@@ -658,6 +658,111 @@ def unmerge_table(request, pk):
     return Response({'order': _fresh(request, order.id), 'new_order': _fresh(request, new.id) if new else None})
 
 
+class MoveLineSerializer(serializers.Serializer):
+    order_item_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1, max_value=999)
+
+
+class MoveItemsSerializer(serializers.Serializer):
+    destination_table_id = serializers.IntegerField()
+    items = MoveLineSerializer(many=True, min_length=1, max_length=200)
+
+
+def _copy_line(item, order, table, quantity):
+    """A copy of the line (same snapshots, kitchen status and KOT) for `quantity` of it on another order."""
+    taxes = list(item.taxes.all())
+    copy = OrderItem.objects.create(
+        order=order, table=table, product_id=item.product_id, menu_item_name=item.menu_item_name,
+        category_name=item.category_name, unit_price=item.unit_price, quantity=quantity,
+        special_instructions=item.special_instructions, status=item.status, discountable=item.discountable,
+        kot_id=item.kot_id, created_by=item.created_by)
+    OrderItemTax.objects.bulk_create([
+        OrderItemTax(item=copy, tax_id=t.tax_id, name=t.name, type=t.type, rate=t.rate, amount=t.amount,
+                     fixed_basis=t.fixed_basis, tenant_id=copy.tenant_id) for t in taxes])
+    return copy
+
+
+@api_view(['POST'])
+def move_items(request, pk):
+    """
+    Move all or part of some lines to another table: onto its open order (or the bill it is merged
+    into), or a new order when it has none. Lines keep their KOT and kitchen status. A source
+    order left with nothing to bill closes as 'merged' into the destination.
+    """
+    body = MoveItemsSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    data = body.validated_data
+    source = _locked_order(request, pk)
+    wanted = {}
+    for line in data['items']:
+        wanted[line['order_item_id']] = wanted.get(line['order_item_id'], 0) + line['quantity']
+
+    table = DiningTable.objects.select_for_update().filter(
+        id=data['destination_table_id'], outlet=source.outlet, is_active=True).first()
+    if table is None:
+        raise ApiError('No such table in this restaurant.', code='invalid',
+                       fields={'destination_table_id': ['No such table.']})
+    if table.id == source.table_id or source.linked_tables.filter(table=table).exists():
+        raise Conflict(f'Table {table.table_number} is already on this bill.', code='same_bill')
+
+    lines = {i.id: i for i in OrderItem.objects.select_for_update().filter(order=source, id__in=wanted)
+             .prefetch_related('taxes')}
+    for item_id, quantity in wanted.items():
+        item = lines.get(item_id)
+        if item is None:
+            raise ApiError("This item isn't on this order.", code='invalid', fields={'items': [f'No line {item_id} here.']})
+        if item.status == 'cancelled' or quantity > item.quantity:
+            raise ApiError(f'Only {item.quantity} {item.menu_item_name} can be moved.', code='invalid',
+                           fields={'items': [f'At most {item.quantity} of line {item_id}.']})
+    _check_can_combine(source, 'changed')
+
+    target = open_order_of_table(table)
+    sent = any(lines[i].kot_id or lines[i].status != 'pending' for i in wanted)
+    if target is None:
+        day = business_date(source.outlet, request.tenant)
+        target = Order.objects.create(
+            outlet=source.outlet, table=table, type=source.type, business_date=day,
+            order_number=new_order_number(source.outlet, day), service_charge_rate=source.service_charge_rate,
+            status='confirmed' if sent else 'pending', server=source.server, created_by=request.user)
+        line_table = None
+    else:
+        target = Order.objects.select_for_update().get(id=target.id)
+        _check_can_combine(target, 'changed')
+        line_table = None if target.table_id == table.id else table  # a table merged into that bill
+        if sent and target.status == 'pending':
+            target.status = 'confirmed'
+            target.save(update_fields=['status', 'updated_at'])
+
+    moved = []
+    for item_id, quantity in wanted.items():
+        item = lines[item_id]
+        if quantity == item.quantity:
+            item.order, item.table = target, line_table
+            item.save(update_fields=['order', 'table', 'updated_at'])
+        else:
+            item.quantity -= quantity
+            item.save(update_fields=['quantity', 'updated_at'])
+            _copy_line(item, target, line_table, quantity)
+        moved.append({'name': item.menu_item_name, 'quantity': quantity})
+
+    recalculate(target, request.tenant)
+    closed = not source.items.filter(quantity__gt=0).exists()
+    if closed:
+        source.status = 'merged'
+        source.merged_into = target
+        source.closed_at = timezone.now()
+        source.closed_by = request.user
+    recalculate(source, request.tenant)
+    sync_order_tables(source)
+    sync_order_tables(target)
+    record(source, 'items_moved_out', request.user, to_order=target.order_number, table=table.table_number, items=moved)
+    record(target, 'items_moved_in', request.user, from_order=source.order_number, items=moved)
+    audit.record(request, 'order.move_items', 'order', source.id,
+                 after={'from': source.order_number, 'to': target.order_number, 'table': table.table_number,
+                        'items': moved, 'source_closed': closed})
+    return Response({'source_order': _fresh(request, source.id), 'destination_order': _fresh(request, target.id)})
+
+
 # ---- Items --------------------------------------------------------------------
 
 def _sent_to_kitchen(order):

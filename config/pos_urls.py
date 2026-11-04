@@ -45,6 +45,7 @@ urlpatterns = [
     path('orders/<int:pk>/cancel/', orders.cancel),
     path('orders/<int:pk>/send_kot/', orders.send_kot),
     path('orders/<int:pk>/unmerge/', orders.unmerge_table),
+    path('orders/<int:pk>/move_items/', orders.move_items),
     path('order-items/', orders.add_item),
     path('order-items/<int:pk>/', orders.item_detail),
     path('order-items/<int:pk>/void/', orders.void_item),

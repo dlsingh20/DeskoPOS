@@ -266,6 +266,24 @@ class OrderService {
   }
 
   /**
+   * DeskoPOS: move all or part of some lines to another table (POST orders/{id}/move_items/).
+   * They go onto the table's open order, or a new one. Returns { source_order, destination_order }.
+   * @param {Array<{order_item_id: number, quantity: number}>} items
+   */
+  async moveItems(orderId, destinationTableId, items) {
+    try {
+      const response = await ApiClient.post(`${this.baseURL}/orders/${orderId}/move_items/`, {
+        destination_table_id: destinationTableId,
+        items,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error moving items:', error);
+      throw this._handleError(error);
+    }
+  }
+
+  /**
    * DeskoPOS: take a merged table off the bill (POST orders/{id}/unmerge/). The lines it
    * ordered move to a new order of its own. Returns { order, new_order }.
    */

@@ -53,7 +53,7 @@ Status checked against the live API on 19 Oct 2026 (cash counters on 20 Oct): **
 | 21 | Live | P1 | New endpoint | POST | `/api/pos/api/order-items/{id}/void/` | Reduce or remove an item already sent to the kitchen |
 | 22 | Not in API yet | P2 | New endpoint | POST | `/api/pos/api/orders/{id}/send_kot/` | Send new items to the kitchen (KOT tracking) |
 | 23 | Not in API yet | P2 | New endpoint | POST | `/api/pos/api/orders/merge/` | Merge tables |
-| 24 | Not in API yet | P2 | New endpoint | POST | `/api/pos/api/orders/{id}/move_items/` | Move items between tables |
+| 24 | Done | P2 | New endpoint | POST | `/api/pos/api/orders/{id}/move_items/` | Move items between tables |
 | 25 | Not in API yet | P2 | New endpoint | GET | `/api/pos/api/orders/history/` | Closed bills with filters |
 | 26 | Not in API yet | P2 | New endpoint | GET | `/api/pos/api/orders/history/summary/` | History summary cards |
 | 27 | Not in API yet | P3 | New endpoint | GET | `/api/pos/api/reports/{report}/` | Server-side reports |
