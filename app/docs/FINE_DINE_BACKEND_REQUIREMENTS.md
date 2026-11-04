@@ -41,7 +41,10 @@ Settling or cancelling the bill frees every table on it.
 
 ## 2. Move items between tables
 
-The UI is in `MoveItemsDialog.jsx`. To enable it, set `MOVE_ITEMS_SUPPORTED = true` and wire `onMove` in `FineDineDashboard.jsx`.
+Done (DeskoPOS backend). The UI is in `MoveItemsDialog.jsx`, wired to `moveItems` in `FineDineDashboard.jsx`.
+Moved lines keep their KOT and kitchen status; a partial move splits the line rather than joining a matching
+one on the destination. Moving onto a table merged into a bill adds the lines under that table's name. Orders
+with payments or a discount can't be changed. An emptied source order closes as `merged` into the destination.
 
 `POST /api/pos/api/orders/{source_order_id}/move_items/`
 

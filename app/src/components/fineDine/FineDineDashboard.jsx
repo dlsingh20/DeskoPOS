@@ -217,6 +217,27 @@ const FineDineDashboard = () => {
     }
   };
 
+  /** Move all or part of some lines to another table (onto its open order, or a new one) */
+  const moveItems = async ({ sourceOrder, destinationTable, items }) => {
+    try {
+      const { source_order: source } = await orderService.moveItems(sourceOrder.id, destinationTable.id, items);
+      const count = items.reduce((sum, i) => sum + i.quantity, 0);
+      toast({
+        title: `${count} ${count === 1 ? 'item' : 'items'} moved to Table ${getTableLabel(destinationTable)}`,
+        description: source.status === 'merged'
+          ? `Nothing is left on Table ${sourceOrder.table_number}, so its order is closed.`
+          : 'Both bills are updated.',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      setMoveOpen(false);
+      refresh({ silent: true });
+    } catch (error) {
+      toast({ title: 'Could not move the items', description: error.message, status: 'error', duration: 7000, isClosable: true });
+    }
+  };
+
   /** Split Table: add table 4-1 next to the chosen table and start its order right away */
   const splitTable = async (table) => {
     try {
@@ -438,6 +459,7 @@ const FineDineDashboard = () => {
         tables={tables}
         ordersByTable={ordersByTable}
         formatPrice={formatPrice}
+        onMove={moveItems}
       />
 
       <AddTableDialog

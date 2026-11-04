@@ -22,11 +22,7 @@ import {
 } from '@chakra-ui/react';
 import { DIALOG_CONTENT, useDialogSize } from './responsive';
 import { Plus, Minus } from 'lucide-react';
-import BackendRequiredNotice from './BackendRequiredNotice';
 import { getBillableItems, getTableLabel } from '../../utils/fineDineUtils';
-
-// Flip to true once POST /orders/{id}/move_items/ exists, and implement onMove in the dashboard
-export const MOVE_ITEMS_SUPPORTED = false;
 
 /**
  * Pick items (and how many of each) from one table's order and a destination table.
@@ -36,6 +32,7 @@ const MoveItemsDialog = ({ isOpen, onClose, tables, ordersByTable, initialSource
   const [sourceId, setSourceId] = useState('');
   const [destinationId, setDestinationId] = useState('');
   const [quantities, setQuantities] = useState({});
+  const [moving, setMoving] = useState(false);
   const rowBg = useColorModeValue('gray.50', 'gray.700');
 
   const occupiedTables = tables.filter((t) => ordersByTable[t.id]?.length);
@@ -141,19 +138,26 @@ const MoveItemsDialog = ({ isOpen, onClose, tables, ordersByTable, initialSource
               </>
             )}
 
-            {!MOVE_ITEMS_SUPPORTED && <BackendRequiredNotice action="Moving items" endpoint="POST /api/pos/api/orders/{id}/move_items/" />}
           </VStack>
         </ModalBody>
         <ModalFooter gap={2}>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose} isDisabled={moving}>Cancel</Button>
           <Button
             colorScheme="yellow"
-            isDisabled={!MOVE_ITEMS_SUPPORTED || errors.length > 0}
-            onClick={() => onMove?.({
-              sourceOrder,
-              destinationTable: destination,
-              items: selectedLines.map((item) => ({ order_item_id: item.id, quantity: quantities[item.id] })),
-            })}
+            isDisabled={errors.length > 0}
+            isLoading={moving}
+            onClick={async () => {
+              setMoving(true);
+              try {
+                await onMove?.({
+                  sourceOrder,
+                  destinationTable: destination,
+                  items: selectedLines.map((item) => ({ order_item_id: item.id, quantity: quantities[item.id] })),
+                });
+              } finally {
+                setMoving(false);
+              }
+            }}
           >
             Move {movingUnits || ''} {movingUnits === 1 ? 'item' : 'items'}
           </Button>
