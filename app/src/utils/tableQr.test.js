@@ -16,9 +16,9 @@ describe('ordering link', () => {
       .toBe('https://guest.example.com/t/abc123');
   });
 
-  test('builds the guest app link with the table secret code', () => {
+  test('builds the guest ordering link from the table secret code', () => {
     const url = buildTableOrderingUrl({ id: 5, qr_code: 'k7Fq9x', qr_code_url: 'https://cdn.example.com/qr/5.png' }, { restaurantId: 3, hotelId: '7', baseUrl: base });
-    expect(url).toBe('https://guest.example.com/ordering/table?hotel=7&restaurant=3&table=5&code=k7Fq9x&source=qr');
+    expect(url).toBe('https://guest.example.com/order/k7Fq9x');
   });
 
   test('image paths in qr_code are not treated as codes', () => {

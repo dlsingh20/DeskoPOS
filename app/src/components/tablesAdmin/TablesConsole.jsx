@@ -370,14 +370,30 @@ const PrintDialog = ({ tables, onClose, linkFor, restaurantName }) => {
 
 /* ---------------------------- QR ordering settings ---------------------------- */
 
-/** How QR orders are handled; saved on this device for the restaurant (like print settings) */
+/** How QR orders are handled: the mode is the restaurant's (every device); which device prints, and sound, are this device's */
 const QrSettingsCard = ({ restaurant }) => {
   const toast = useToast();
   const panelBg = useColorModeValue('white', 'gray.800');
   const lineColor = useColorModeValue('gray.200', 'gray.700');
   const muted = useColorModeValue('gray.500', 'gray.400');
   const [qr, setQr] = useState(() => printSettingsService.get(restaurant.id).qrOrders);
-  useEffect(() => { setQr(printSettingsService.get(restaurant.id).qrOrders); }, [restaurant.id]);
+  useEffect(() => {
+    setQr(printSettingsService.get(restaurant.id).qrOrders);
+    printSettingsService.loadShared(restaurant.id)
+      .then(() => setQr(printSettingsService.get(restaurant.id).qrOrders))
+      .catch(() => {});
+  }, [restaurant.id]);
+
+  const saveMode = async (mode) => {
+    try {
+      const saved = await printSettingsService.saveQrMode(restaurant.id, mode);
+      setQr((cur) => ({ ...cur, mode: saved }));
+      toast({ title: 'Saved for every device of this restaurant', status: 'success', duration: 2000 });
+    } catch (error) {
+      const message = error?.response?.status === 403 ? 'Your role cannot change this.' : (error?.response?.data?.detail || error.message);
+      toast({ title: 'Could not save', description: message, status: 'error', duration: 5000 });
+    }
+  };
 
   const save = (patch) => {
     const next = { ...qr, ...patch };
@@ -396,7 +412,7 @@ const QrSettingsCard = ({ restaurant }) => {
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
         <Box>
           <Text fontSize="sm" mb={1}>When a guest orders by QR</Text>
-          <RadioGroup value={qr.mode} onChange={(mode) => save({ mode })}>
+          <RadioGroup value={qr.mode} onChange={saveMode}>
             <VStack align="stretch" spacing={1}>
               <Radio value="auto"><Text fontSize="sm">Send to the kitchen and print the KOT automatically</Text></Radio>
               <Radio value="accept"><Text fontSize="sm">Cashier accepts or rejects first</Text></Radio>

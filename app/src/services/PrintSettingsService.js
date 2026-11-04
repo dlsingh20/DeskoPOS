@@ -160,9 +160,10 @@ export const toServerPrintSettings = (s) => ({
   },
   kot_copies: s.kotCopies,
   auto_print_bill: s.autoPrintBill,
+  qr_orders_mode: s.qrOrders.mode,
 });
 
-/** The server's print settings → app settings, keeping this device's QR ordering options */
+/** The server's print settings → app settings; QR ordering's mode is the restaurant's, the rest this device's */
 export const fromServerPrintSettings = (d, local) => normalizePrintSettings({
   billFormat: d.bill_format,
   kotFormat: d.kot_format,
@@ -187,7 +188,7 @@ export const fromServerPrintSettings = (d, local) => normalizePrintSettings({
   } : local.tax,
   kotCopies: d.kot_copies,
   autoPrintBill: d.auto_print_bill,
-  qrOrders: local.qrOrders,
+  qrOrders: { ...local.qrOrders, mode: d.qr_orders_mode === 'accept' ? 'accept' : 'auto' },
 });
 
 class PrintSettingsService {
@@ -202,11 +203,16 @@ class PrintSettingsService {
   get(restaurantId, country) {
     const id = restaurantId ?? safeGet(LAST_RESTAURANT_KEY);
     const stored = safeGet(storageKey(id));
+    let settings;
     try {
-      return { ...normalizePrintSettings(stored ? JSON.parse(stored) : {}, country), saved: !!stored };
+      settings = { ...normalizePrintSettings(stored ? JSON.parse(stored) : {}, country), saved: !!stored };
     } catch (error) {
-      return { ...normalizePrintSettings({}, country), saved: false };
+      settings = { ...normalizePrintSettings({}, country), saved: false };
     }
+    // The restaurant's QR ordering mode, kept apart so it never counts as saved print settings
+    const mode = safeGet(qrModeKey(id));
+    if (mode === 'auto' || mode === 'accept') settings.qrOrders = { ...settings.qrOrders, mode };
+    return settings;
   }
 
   /** @returns {boolean} false if the browser refused to store it */
@@ -231,7 +237,11 @@ class PrintSettingsService {
   async loadShared(restaurantId) {
     if (!IS_DESKOPOS || restaurantId === undefined || restaurantId === null) return false;
     const response = await ApiClient.get(`/api/pos/api/restaurants/${restaurantId}/print-settings/`);
-    if (!response.data?.saved) return false;
+    safeSet(qrModeKey(restaurantId), response.data?.qr_orders_mode === 'accept' ? 'accept' : 'auto');
+    if (!response.data?.saved) {
+      this.listeners.forEach((listener) => listener(restaurantId, this.get(restaurantId)));
+      return false;
+    }
     const next = fromServerPrintSettings(response.data, this.get(restaurantId));
     if (!safeSet(storageKey(restaurantId), JSON.stringify(next))) return false;
     this.listeners.forEach((listener) => listener(restaurantId, next));
@@ -245,6 +255,14 @@ class PrintSettingsService {
       toServerPrintSettings(normalizePrintSettings(settings)));
   }
 
+  /** DeskoPOS: how this restaurant handles QR orders, 'auto' or 'accept', for every device (needs settings.manage) */
+  async saveQrMode(restaurantId, mode) {
+    const response = await ApiClient.put(`/api/pos/api/restaurants/${restaurantId}/qr-ordering/`, { mode });
+    safeSet(qrModeKey(restaurantId), response.data.mode);
+    this.listeners.forEach((listener) => listener(restaurantId, this.get(restaurantId)));
+    return response.data.mode;
+  }
+
   subscribe(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -253,6 +271,10 @@ class PrintSettingsService {
 
 function storageKey(restaurantId) {
   return `${STORAGE_PREFIX}:${restaurantId ?? 'default'}`;
+}
+
+function qrModeKey(restaurantId) {
+  return `${STORAGE_PREFIX}:qr_mode:${restaurantId ?? 'default'}`;
 }
 
 const printSettingsService = new PrintSettingsService();

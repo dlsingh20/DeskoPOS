@@ -271,3 +271,21 @@ def print_settings(request, pk):
                      after={'bill_format': ps.bill_format, 'kot_format': ps.kot_format})
         ps = PrintSettings.objects.select_related('updated_by').get(id=ps.id)
     return Response(print_settings_payload(ps))
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([read_or_require('settings.manage')])
+def qr_ordering(request, pk):
+    """How guests' QR orders are handled at this restaurant: 'auto' (straight to the kitchen) or 'accept'."""
+    outlet = generics.get_object_or_404(outlets_for(request.user), pk=pk)
+    ps, _ = PrintSettings.objects.get_or_create(outlet=outlet, defaults={'header': {'name': outlet.name}})
+    if request.method == 'PUT':
+        mode = request.data.get('mode')
+        if mode not in ('auto', 'accept'):
+            raise ApiError('Choose auto or accept.', code='invalid', fields={'mode': ['Choose auto or accept.']})
+        ps = PrintSettings.objects.select_for_update().get(id=ps.id)
+        before = (ps.options or {}).get('qr_orders_mode', 'auto')
+        ps.options = {**(ps.options or {}), 'qr_orders_mode': mode}
+        ps.save(update_fields=['options', 'updated_at'])
+        audit.record(request, 'qr_ordering.update', 'outlet', outlet.id, before={'mode': before}, after={'mode': mode})
+    return Response({'restaurant_id': outlet.id, 'mode': (ps.options or {}).get('qr_orders_mode', 'auto')})

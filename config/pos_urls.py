@@ -17,6 +17,7 @@ urlpatterns = [
     path('restaurants/', outlets.RestaurantList.as_view()),
     path('restaurants/<int:pk>/', outlets.RestaurantDetail.as_view()),
     path('restaurants/<int:pk>/print-settings/', outlets.print_settings),
+    path('restaurants/<int:pk>/qr-ordering/', outlets.qr_ordering),
     path('staff/', accounts.staff),
     path('reports/top_items', reports.top_items),
     path('reports/top_items/', reports.top_items),
